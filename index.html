@@ -1040,6 +1040,15 @@
     </div>
   </div>
 
+  <div id="splashInstallWrap" style="position:absolute; bottom:90px; display:none; flex-direction:column; align-items:center; gap:8px;">
+    <button id="splashInstallBtn" style="
+      background: linear-gradient(135deg, var(--accent, #5aa897), #7fc4b3);
+      color:#fff; border:none; border-radius:10px;
+      padding:12px 28px; font-family:'JetBrains Mono',monospace;
+      font-size:13px; font-weight:700; letter-spacing:1px; cursor:pointer;
+    ">📲 Instaliraj aplikaciju</button>
+  </div>
+
   <div style="position:absolute; bottom: 48px; font-size: 11px; letter-spacing: 3px; color:#5f7a6e; animation: blink 2s ease-in-out infinite;">
     DODIRNI ZA POČETAK
   </div>
@@ -1179,6 +1188,7 @@
     <button class="btn btn-menu" id="viewSheetsBtn" style="width:100%; margin-bottom:8px;">Pregled svih tablica</button>
     <button class="btn btn-menu" id="printSheetBtn" style="width:100%; margin-bottom:8px;">🖨 Ispiši prazan listić</button>
     <button class="btn btn-menu" id="rulesBtn" style="width:100%; margin-bottom:8px;">Pravila</button>
+    <button class="btn btn-roll" id="installAppBtn" style="width:100%; margin-bottom:8px; display:none;">📲 Instaliraj aplikaciju</button>
     <button class="btn btn-menu" id="closeMenuBtn" style="width:100%;">Zatvori</button>
   </div>
 </div>
@@ -2555,7 +2565,50 @@ document.getElementById('physCancelAnnounceBtn').onclick = () =>
 init();
 </script>
 <script>
-// PWA service worker registration + update notification
+// ============== PWA INSTALL PROMPT ==============
+let _installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _installPrompt = e;
+  // Show install buttons wherever they exist
+  const menuBtn  = document.getElementById('installAppBtn');
+  const splashWrap = document.getElementById('splashInstallWrap');
+  if (menuBtn)    menuBtn.style.display = 'block';
+  if (splashWrap) splashWrap.style.display = 'flex';
+});
+
+async function triggerInstall() {
+  if (!_installPrompt) return;
+  _installPrompt.prompt();
+  const { outcome } = await _installPrompt.userChoice;
+  if (outcome === 'accepted') {
+    _installPrompt = null;
+    const menuBtn   = document.getElementById('installAppBtn');
+    const splashWrap= document.getElementById('splashInstallWrap');
+    if (menuBtn)    menuBtn.style.display = 'none';
+    if (splashWrap) splashWrap.style.display = 'none';
+  }
+}
+
+window.addEventListener('appinstalled', () => {
+  _installPrompt = null;
+  const menuBtn   = document.getElementById('installAppBtn');
+  const splashWrap= document.getElementById('splashInstallWrap');
+  if (menuBtn)    menuBtn.style.display = 'none';
+  if (splashWrap) splashWrap.style.display = 'none';
+});
+
+document.getElementById('installAppBtn').addEventListener('click', () => {
+  document.getElementById('menuModal').classList.remove('active');
+  triggerInstall();
+});
+document.getElementById('splashInstallBtn').addEventListener('click', (e) => {
+  e.stopPropagation(); // don't dismiss splash
+  triggerInstall();
+});
+
+// ============== PWA SERVICE WORKER ==============
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').then(reg => {

@@ -4,12 +4,12 @@
   "description": "Yamb tablica za bilježenje rezultata — ručni unos, više igrača i kolona.",
   "lang": "hr",
   "dir": "ltr",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/Yamb/",
+  "scope": "/Yamb/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f5f3ee",
-  "theme_color": "#f5f3ee",
+  "background_color": "#f4f7f4",
+  "theme_color": "#f4f7f4",
   "icons": [
     {
       "src": "icon-32.png",

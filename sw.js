@@ -1,17 +1,17 @@
 /* Yamb service worker — offline-first caching for GitHub Pages */
-const CACHE = 'yamb-v22';
+const CACHE = 'yamb-v24';
+const BASE = '/Yamb/';
 
-/* Paths are relative so this works whether the app is served from the
-   domain root or from a project subpath (e.g. user.github.io/yamb/). */
 const ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-32.png',
-  './icon-180.png',
-  './icon-192.png',
-  './icon-512.png',
-  './icon-maskable-512.png'
+  BASE,
+  BASE + 'index.html',
+  BASE + 'manifest.json',
+  BASE + 'icon-32.png',
+  BASE + 'icon-180.png',
+  BASE + 'icon-192.png',
+  BASE + 'icon-512.png',
+  BASE + 'icon-maskable-512.png',
+  BASE + 'dice.png',
 ];
 
 self.addEventListener('message', (event) => {
@@ -25,7 +25,6 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE).then((cache) =>
       Promise.allSettled(ASSETS.map((url) => cache.add(url)))
     )
-    // No skipWaiting here — we wait for user to click "Osvježi"
   );
 });
 
@@ -41,7 +40,6 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
-  // Network-first for navigations (so updates show), fallback to cache offline.
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
@@ -51,13 +49,12 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() =>
-          caches.match(req).then((r) => r || caches.match('./index.html'))
+          caches.match(req).then((r) => r || caches.match(BASE + 'index.html'))
         )
     );
     return;
   }
 
-  // Cache-first for static assets.
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
