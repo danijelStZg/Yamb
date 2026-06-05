@@ -2156,40 +2156,52 @@ function printBlankSheet() {
     drawTable(Math.round(ox), tableW);
   }
 
-  // ── Convert to image and print via iframe ────────────────────────────
+  // ── Show image in-app for saving/printing ─────────────────────────
   const imgData = can.toDataURL('image/png');
-  const printDoc = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <style>
-      * { margin:0; padding:0; box-sizing:border-box; }
-      @page { size: landscape; margin: 0; }
-      @media print { html,body { margin:0; } img { page-break-inside:avoid; } }
-      body { display:flex; align-items:center; justify-content:center;
-             width:100vw; height:100vh; background:#fff; }
-      img { max-width:100%; max-height:100%; display:block; }
-    </style></head>
-    <body><img src="${imgData}" alt="Yamb listić"></body></html>`;
 
-  const existing = document.getElementById('printFrame');
-  if (existing) existing.remove();
+  // Build or reuse preview overlay
+  let overlay = document.getElementById('printPreviewOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'printPreviewOverlay';
+    overlay.style.cssText = `
+      position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.92);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      padding:12px; box-sizing:border-box;
+    `;
+    document.body.appendChild(overlay);
+  }
 
-  const iframe = document.createElement('iframe');
-  iframe.id = 'printFrame';
-  iframe.setAttribute('aria-hidden', 'true');
-  Object.assign(iframe.style, {
-    position:'fixed', right:'0', bottom:'0',
-    width:'1px', height:'1px', border:'0', opacity:'0', pointerEvents:'none'
-  });
-  document.body.appendChild(iframe);
+  overlay.innerHTML = `
+    <div style="color:#fff; font-family:'JetBrains Mono',monospace; font-size:11px;
+                letter-spacing:1px; margin-bottom:10px; text-align:center; opacity:0.8;">
+      YAMB — PRAZAN LISTIĆ (A4 LANDSCAPE)
+    </div>
+    <img src="${imgData}" style="max-width:100%; max-height:72vh; border:1px solid #444;
+         display:block; background:#fff;">
+    <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; justify-content:center;">
+      <a id="ppDownload" download="yamb-listic.png" href="${imgData}"
+         style="background:var(--accent); color:#fff; border:none; border-radius:8px;
+                padding:12px 20px; font-family:'JetBrains Mono',monospace;
+                font-size:12px; font-weight:700; text-decoration:none; cursor:pointer;
+                letter-spacing:1px; display:flex; align-items:center; gap:6px;">
+        ⬇ Preuzmi PNG
+      </a>
+      <button id="ppClose"
+         style="background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.4);
+                border-radius:8px; padding:12px 20px; font-family:'JetBrains Mono',monospace;
+                font-size:12px; cursor:pointer; letter-spacing:1px;">
+        Zatvori
+      </button>
+    </div>
+    <div style="color:rgba(255,255,255,0.5); font-size:10px; margin-top:10px;
+                text-align:center; font-family:'JetBrains Mono',monospace; max-width:280px; line-height:1.6;">
+      Preuzmi sliku → otvori u Galeriji/Files → Ispiši → odaberi Landscape
+    </div>
+  `;
 
-  const go = () => {
-    try { iframe.contentWindow.focus(); iframe.contentWindow.print(); }
-    catch(e) { showToast('Ispis nije uspio'); }
-    setTimeout(() => { try { iframe.remove(); } catch(e){} }, 4000);
-  };
-
-  const idoc = iframe.contentWindow.document;
-  idoc.open(); idoc.write(printDoc); idoc.close();
-  setTimeout(go, 700);
+  overlay.style.display = 'flex';
+  document.getElementById('ppClose').onclick = () => { overlay.style.display = 'none'; };
 }
 
 // Override new game button to confirm
