@@ -1,5 +1,5 @@
 /* Yamb service worker — offline-first caching for GitHub Pages */
-const CACHE = 'yamb-v13';
+const CACHE = 'yamb-v18';
 
 /* Paths are relative so this works whether the app is served from the
    domain root or from a project subpath (e.g. user.github.io/yamb/). */
@@ -14,12 +14,18 @@ const ASSETS = [
   './icon-maskable-512.png'
 ];
 
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) =>
-      // addAll fails the whole install if one URL 404s, so add tolerantly
       Promise.allSettled(ASSETS.map((url) => cache.add(url)))
-    ).then(() => self.skipWaiting())
+    )
+    // No skipWaiting here — we wait for user to click "Osvježi"
   );
 });
 

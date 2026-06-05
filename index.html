@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#f4f7f4">
-<link rel="manifest" href="./manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" sizes="32x32" href="./icon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1033,8 +1035,8 @@
     <div style="font-size: clamp(52px, 16vw, 80px); letter-spacing: 10px; line-height:1; color:#fff; font-weight:900;">
       YAM<span style="color:#5aa897;">B</span>
     </div>
-    <div style="font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: clamp(12px, 3.4vw, 15px); color:#7a8f8a; margin-top: 10px; letter-spacing: 0.5px; font-weight: 400;">
-      crafted by <span style="color:#e8927c; font-weight:700; font-style:italic; font-family: Georgia, 'Times New Roman', serif;">Danijel.AI</span>
+    <div style="font-family:'Playfair Display',Georgia,serif; font-style:italic; font-size:clamp(13px,3.6vw,16px); color:#7a8f8a; margin-top:10px; letter-spacing:0.3px; font-weight:400;">
+      crafted by <span style="color:#e8927c; font-weight:700; font-style:italic;">Danijel.AI</span>
     </div>
   </div>
 
@@ -1047,6 +1049,10 @@
   @keyframes blink {
     0%, 100% { opacity: 0.4; }
     50% { opacity: 1; }
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
   }
   #splash.fade-out {
     opacity: 0;
@@ -1247,6 +1253,28 @@
     <div class="scoreboard-final" id="finalBoard"></div>
     <button class="btn btn-roll" id="playAgainBtn" style="width:100%;">Nova igra</button>
   </div>
+</div>
+
+<div id="updateBanner" style="
+  display:none; position:fixed; bottom:0; left:0; right:0; z-index:8888;
+  background:var(--accent); color:#fff;
+  padding:14px 16px; text-align:center;
+  font-family:'JetBrains Mono',monospace; font-size:13px;
+  box-shadow:0 -4px 20px rgba(0,0,0,0.2);
+  animation: slideUp .3s ease;
+">
+  🆕 Nova verzija je dostupna!
+  <button onclick="location.reload()" style="
+    margin-left:12px; background:#fff; color:var(--accent);
+    border:none; border-radius:6px; padding:6px 14px;
+    font-weight:700; font-size:12px; cursor:pointer;
+    font-family:'JetBrains Mono',monospace;
+  ">Osvježi</button>
+  <button onclick="document.getElementById('updateBanner').style.display='none'" style="
+    margin-left:6px; background:transparent; color:rgba(255,255,255,0.7);
+    border:1px solid rgba(255,255,255,0.4); border-radius:6px; padding:6px 10px;
+    font-size:12px; cursor:pointer; font-family:'JetBrains Mono',monospace;
+  ">✕</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1674,25 +1702,32 @@ function renderColumnPicker() {
 // Render the install QR (encodes this page's URL).
 let qrRendered = false;
 function renderInstallQR() {
-  if (qrRendered) return;
   const box = document.getElementById('qrBox');
-  if (!box || typeof qrcode === 'undefined') return;
+  if (!box) return;
+  if (qrRendered) return;
+  if (typeof qrcode === 'undefined') { box.textContent = 'QR nije dostupan'; return; }
   try {
-    const url = window.location.href.split('#')[0];
-    const qr = qrcode(0, 'M');
-    qr.addData(url);
+    const url = 'https://danijelstzg.github.io/Yamb/';
+    const qr = qrcode(0, 'L');
+    qr.addData(url, 'Byte');
     qr.make();
-    box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
-    const svg = box.querySelector('svg');
-    if (svg) { svg.style.width = '160px'; svg.style.height = '160px'; svg.style.display = 'block'; }
+    // Use object form so SVG has no fixed px dimensions — only viewBox (scalable)
+    const svg = qr.createSvgTag({ cellSize: 4, margin: 8, scalable: true });
+    box.innerHTML = svg;
+    const svgEl = box.querySelector('svg');
+    if (svgEl) {
+      svgEl.removeAttribute('width');
+      svgEl.removeAttribute('height');
+      svgEl.style.cssText = 'width:180px;height:180px;display:block;';
+    }
     qrRendered = true;
   } catch (e) {
-    const box = document.getElementById('qrBox');
-    if (box) box.textContent = 'QR nije dostupan';
+    box.textContent = 'QR greška: ' + e;
   }
 }
 
 document.getElementById('qrInstallBtn').onclick = () => {
+  renderInstallQR();
   document.getElementById('qrModal').classList.add('active');
 };
 document.getElementById('closeQrBtn').onclick = () => document.getElementById('qrModal').classList.remove('active');
@@ -1990,7 +2025,7 @@ function printBlankSheet() {
   const printRows = [
     { l:'1', s:'top' }, { l:'2', s:'top' }, { l:'3', s:'top' }, { l:'4', s:'top' },
     { l:'5', s:'top' }, { l:'6', s:'top' },
-    { l:'Σ gore', s:'sum', ro:true },
+    { l:'Međuzbroj', s:'sum', ro:true },
     { l:'Max', s:'mid', sep:true }, { l:'Min', s:'mid' },
     { l:'Razlika', d:'(Max − Min) × br. jedinica', s:'sum', ro:true },
     { l:'2 para', d:'+10', s:'bot', sep:true },
@@ -1998,7 +2033,7 @@ function printBlankSheet() {
     { l:'Full', d:'+30', s:'bot' },
     { l:'Poker', d:'+40', s:'bot' },
     { l:'Yamb', d:'+50', s:'bot' },
-    { l:'Σ dolje', s:'sum', ro:true },
+    { l:'Međuzbroj', s:'sum', ro:true },
     { l:'UKUPNO', s:'total', ro:true },
   ];
 
@@ -2014,11 +2049,14 @@ function printBlankSheet() {
       if (r.sep) cls.push('sep');
       const trcls = cls.length ? ` class="${cls.join(' ')}"` : '';
       const desc = r.d ? `<span class="d">${r.d}</span>` : '';
+      // Insert spacer row before UKUPNO
+      if (r.s === 'total') h += `<tr class="spacer"><td colspan="${nCols + 1}"></td></tr>`;
       h += `<tr${trcls}><td class="rl">${r.l}${desc}</td>`;
       colDefs.forEach(() => h += (r.ro ? '<td class="ro"></td>' : '<td></td>'));
       h += '</tr>';
     });
-    // Grand total across all columns
+    // Spacer then grand total
+    h += `<tr class="spacer"><td colspan="${nCols + 1}"></td></tr>`;
     h += `<tr class="grand"><td class="rl">SVEUKUPNO</td><td class="gtotal" colspan="${nCols}"></td></tr>`;
     h += '</tbody></table>';
     return h;
@@ -2034,7 +2072,8 @@ function printBlankSheet() {
     * { box-sizing: border-box; }
     body { font-family: Arial, Helvetica, sans-serif; margin: 0; color: #000; }
     h1 { text-align: center; font-size: 16px; margin: 0 0 4mm; letter-spacing: 2px; }
-    .sheets { display: flex; gap: 5mm; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+    .sheets { display: flex; gap: 0; justify-content: space-around; align-items: flex-start; width: 281mm; box-sizing: border-box; }
+    .sheet-wrap { flex: 0 0 33.33%; display: flex; justify-content: center; align-items: flex-start; }
     .ps { border-collapse: collapse; width: ${tableW}mm; table-layout: fixed; }
     .ps col.cl { width: ${labelW}mm; }
     .ps col.cv { width: ${valW}mm; }
@@ -2048,13 +2087,14 @@ function printBlankSheet() {
     .ps tr.grand .gtotal { background: #fff; }
     .ps td.ro { background: #ededed; }
     .ps tr.sep td { border-top: 2px solid #000; }
+    .ps tr.spacer td { height: 3mm; border: none; background: transparent; padding: 0; }
   `;
 
   const doc = `<!DOCTYPE html><html lang="hr"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Yamb — prazan listić</title><style>${css}</style></head><body>
     <h1>YAMB</h1>
-    <div class="sheets">${buildTable()}${buildTable()}${buildTable()}</div>
+    <div class="sheets">${['','',''].map(()=>`<div class="sheet-wrap">${buildTable()}</div>`).join('')}</div>
     </body></html>`;
 
   // Print via a hidden same-document iframe. This avoids popup blockers and
@@ -2450,10 +2490,38 @@ document.getElementById('physCancelAnnounceBtn').onclick = () =>
 init();
 </script>
 <script>
-// PWA service worker registration
+// PWA service worker registration + update notification
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW reg failed:', err));
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+
+      // If there's already a waiting SW on first load, show banner immediately
+      if (reg.waiting) {
+        document.getElementById('updateBanner').style.display = 'block';
+      }
+
+      // When a new SW finishes installing and goes to "waiting"
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            document.getElementById('updateBanner').style.display = 'block';
+          }
+        });
+      });
+
+      // Reload the page when the new SW takes control (after user clicks "Osvježi")
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) { refreshing = true; location.reload(); }
+      });
+
+      // "Osvježi" button tells the waiting SW to skip waiting
+      document.querySelector('#updateBanner button').addEventListener('click', () => {
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      });
+
+    }).catch(err => console.log('SW reg failed:', err));
   });
 }
 </script>
