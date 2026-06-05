@@ -2069,6 +2069,10 @@ function printBlankSheet() {
 
   const css = `
     @page { size: A4 landscape; margin: 8mm; }
+    @media print {
+      html, body { width: 297mm; height: 210mm; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
     * { box-sizing: border-box; }
     body { font-family: Arial, Helvetica, sans-serif; margin: 0; color: #000; }
     h1 { text-align: center; font-size: 16px; margin: 0 0 4mm; letter-spacing: 2px; }
@@ -2092,50 +2096,37 @@ function printBlankSheet() {
 
   const doc = `<!DOCTYPE html><html lang="hr"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Yamb — prazan listić</title><style>${css}</style></head><body>
+    <title>Yamb — prazan listić</title><style>${css}</style></head>
+    <body onload="setTimeout(()=>{window.focus();window.print();},400)">
     <h1>YAMB</h1>
     <div class="sheets">${['','',''].map(()=>`<div class="sheet-wrap">${buildTable()}</div>`).join('')}</div>
     </body></html>`;
 
-  // Print via a hidden same-document iframe. This avoids popup blockers and
-  // works reliably on mobile browsers (where window.open often fails silently).
-  const existing = document.getElementById('printFrame');
-  if (existing) existing.remove();
-
-  const iframe = document.createElement('iframe');
-  iframe.id = 'printFrame';
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.style.opacity = '0';
-  document.body.appendChild(iframe);
-
-  const triggerPrint = () => {
-    try {
-      const win = iframe.contentWindow;
-      win.focus();
-      win.print();
-    } catch (e) {
-      showToast('Ispis nije uspio — pokušajte ponovno');
-    }
-    // Clean up after the print dialog has had time to open
-    setTimeout(() => { try { iframe.remove(); } catch (e) {} }, 1500);
-  };
-
-  const idoc = iframe.contentWindow.document;
-  idoc.open();
-  idoc.write(doc);
-  idoc.close();
-
-  // Give the iframe a moment to lay out before printing
-  if (iframe.contentWindow.document.readyState === 'complete') {
-    setTimeout(triggerPrint, 250);
+  // Open in a new tab — triggered directly from user gesture so no popup block.
+  // window.open + window.print() is the most reliable way to get landscape on mobile.
+  const w = window.open('', '_blank');
+  if (w) {
+    w.document.open();
+    w.document.write(doc);
+    w.document.close();
+    // onload in the doc body handles print; also fallback here
+    w.addEventListener('load', () => {
+      setTimeout(() => { try { w.focus(); } catch(e){} }, 300);
+    });
   } else {
-    iframe.onload = () => setTimeout(triggerPrint, 250);
+    // Popup blocked — fallback to hidden iframe
+    const existing = document.getElementById('printFrame');
+    if (existing) existing.remove();
+    const iframe = document.createElement('iframe');
+    iframe.id = 'printFrame';
+    iframe.setAttribute('aria-hidden', 'true');
+    Object.assign(iframe.style, {position:'fixed',right:'0',bottom:'0',width:'0',height:'0',border:'0',opacity:'0'});
+    document.body.appendChild(iframe);
+    const idoc = iframe.contentWindow.document;
+    idoc.open(); idoc.write(doc); idoc.close();
+    const go = () => { try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(e){} setTimeout(()=>iframe.remove(), 2000); };
+    iframe.contentWindow.document.readyState === 'complete' ? setTimeout(go, 300) : (iframe.onload = ()=>setTimeout(go, 300));
+    showToast('Ako se ispis ne otvori, dozvoli skočne prozore');
   }
 }
 
