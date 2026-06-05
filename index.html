@@ -1041,15 +1041,6 @@
     </div>
   </div>
 
-  <div id="splashInstallWrap" style="position:absolute; bottom:90px; display:none; flex-direction:column; align-items:center; gap:8px;">
-    <button id="splashInstallBtn" style="
-      background: linear-gradient(135deg, var(--accent, #5aa897), #7fc4b3);
-      color:#fff; border:none; border-radius:10px;
-      padding:12px 28px; font-family:'JetBrains Mono',monospace;
-      font-size:13px; font-weight:700; letter-spacing:1px; cursor:pointer;
-    ">📲 Instaliraj aplikaciju</button>
-  </div>
-
   <div style="position:absolute; bottom: 48px; font-size: 11px; letter-spacing: 3px; color:#5f7a6e; animation: blink 2s ease-in-out infinite;">
     DODIRNI ZA POČETAK
   </div>
@@ -2586,11 +2577,8 @@ let _installPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   _installPrompt = e;
-  // Show install buttons wherever they exist
-  const menuBtn  = document.getElementById('installAppBtn');
-  const splashWrap = document.getElementById('splashInstallWrap');
-  if (menuBtn)    menuBtn.style.display = 'block';
-  if (splashWrap) splashWrap.style.display = 'flex';
+  const menuBtn = document.getElementById('installAppBtn');
+  if (menuBtn) menuBtn.style.display = 'block';
 });
 
 async function triggerInstall() {
@@ -2599,27 +2587,19 @@ async function triggerInstall() {
   const { outcome } = await _installPrompt.userChoice;
   if (outcome === 'accepted') {
     _installPrompt = null;
-    const menuBtn   = document.getElementById('installAppBtn');
-    const splashWrap= document.getElementById('splashInstallWrap');
-    if (menuBtn)    menuBtn.style.display = 'none';
-    if (splashWrap) splashWrap.style.display = 'none';
+    const menuBtn = document.getElementById('installAppBtn');
+    if (menuBtn) menuBtn.style.display = 'none';
   }
 }
 
 window.addEventListener('appinstalled', () => {
   _installPrompt = null;
-  const menuBtn   = document.getElementById('installAppBtn');
-  const splashWrap= document.getElementById('splashInstallWrap');
-  if (menuBtn)    menuBtn.style.display = 'none';
-  if (splashWrap) splashWrap.style.display = 'none';
+  const menuBtn = document.getElementById('installAppBtn');
+  if (menuBtn) menuBtn.style.display = 'none';
 });
 
 document.getElementById('installAppBtn').addEventListener('click', () => {
   document.getElementById('menuModal').classList.remove('active');
-  triggerInstall();
-});
-document.getElementById('splashInstallBtn').addEventListener('click', (e) => {
-  e.stopPropagation(); // don't dismiss splash
   triggerInstall();
 });
 
