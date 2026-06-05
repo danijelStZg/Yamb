@@ -2,6 +2,8 @@
 
 Yamb tablica za bilježenje rezultata — ručni unos rezultata, više igrača i odabir kolona. Radi kao PWA (može se "instalirati" na početni zaslon i koristiti offline).
 
+Cijeli ekran za igru stane bez skrolanja. Pri unosu rezultata vrijedi validacija po retku (npr. dvojke prihvaćaju samo višekratnik od 2, petice višekratnik od 5, Yamb 0/55/60/…), uz brze gumbe (čipove) za dopuštene vrijednosti.
+
 ## Datoteke
 
 | Datoteka | Opis |
