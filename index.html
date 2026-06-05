@@ -2034,6 +2034,7 @@ function printBlankSheet() {
     { l:'Poker', d:'+40', s:'bot' },
     { l:'Yamb', d:'+50', s:'bot' },
     { l:'Međuzbroj', s:'sum', ro:true },
+    { l:'', s:'spacer', ro:true },
     { l:'UKUPNO', s:'total', ro:true },
     { l:'', s:'spacer', ro:true },
     { l:'SVEUKUPNO', s:'grand', ro:true },
@@ -2055,65 +2056,70 @@ function printBlankSheet() {
   ctx.fillRect(0, 0, CW, CH);
 
   // ── Helper: draw one table ───────────────────────────────────────────
-  function drawTable(originX, originY, tableWidth) {
-    const valW   = Math.round(11 * MM);           // fixed value column width
-    const labelW = tableWidth - nCols * valW;     // label gets remaining space
-    const rowH   = Math.round(9 * MM);
-    const headH  = Math.round(10 * MM);
-    const spacerH= Math.round(3 * MM);
-    const grandH = Math.round(11 * MM);
-    const fBold  = `bold ${Math.round(5.2*MM)}px Arial`;
-    const fDesc  = `${Math.round(3.4*MM)}px Arial`;
-    const fHead  = `bold ${Math.round(6*MM)}px Arial`;
+  // Fixed column dimensions — same regardless of how many cols selected
+  const LABEL_W = Math.round(30 * MM);  // label column: fixed 30mm
+  const VAL_W   = Math.round(12 * MM);  // each value column: fixed 12mm
+  const ROW_H   = Math.round(8.5*MM);
+  const HEAD_H  = Math.round(9.5*MM);
+  const SPACER_H= Math.round(3.5*MM);
+  const GRAND_H = Math.round(10 * MM);
 
-    function cellText(text, x, y, w, h, font, color, yOffset) {
+  // Font sizes — label text same weight/size as header labels
+  const F_LABEL = `bold ${Math.round(4.6*MM)}px Arial`;   // row labels (same size as col headers)
+  const F_HEAD  = `bold ${Math.round(5.2*MM)}px Arial`;   // column header arrows
+  const F_DESC  = `${Math.round(3.2*MM)}px Arial`;        // small description text
+
+  function drawTable(originX, originY) {
+    const labelW = LABEL_W;
+    const valW   = VAL_W;
+    const tW     = labelW + nCols * valW;
+    let y = originY;
+
+    function cellText(text, x, cy, w, h, font, color) {
       ctx.font = font; ctx.fillStyle = color || '#000';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(text, x + w/2, y + h/2 + (yOffset||0));
+      ctx.fillText(text, x + w/2, cy + h/2);
     }
-
-    let y = originY;
 
     // Header row
     ctx.fillStyle = '#e6e6e6';
-    ctx.fillRect(originX, y, tableWidth, headH);
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 0.7;
-    ctx.strokeRect(originX, y, labelW, headH);
+    ctx.fillRect(originX, y, tW, HEAD_H);
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 0.6;
+    ctx.strokeRect(originX, y, labelW, HEAD_H);
     colDefs.forEach((c, i) => {
       const cx = originX + labelW + i * valW;
-      ctx.strokeRect(cx, y, valW, headH);
-      cellText(c.lab, cx, y, valW, headH, fHead);
+      ctx.strokeRect(cx, y, valW, HEAD_H);
+      cellText(c.lab, cx, y, valW, HEAD_H, F_HEAD);
     });
-    y += headH;
+    y += HEAD_H;
 
     // Data rows
     printRows.forEach(r => {
       const isSpacer = r.s === 'spacer';
       const isGrand  = r.s === 'grand';
       const isSum    = r.s === 'sum' || r.s === 'total';
-      const h = isSpacer ? spacerH : isGrand ? grandH : rowH;
+      const h = isSpacer ? SPACER_H : isGrand ? GRAND_H : ROW_H;
       if (isSpacer) { y += h; return; }
 
-      // Row background
       const bg = isSum ? '#e6e6e6' : isGrand ? '#d4d4d4' : '#fff';
       ctx.fillStyle = bg;
-      ctx.fillRect(originX, y, tableWidth, h);
+      ctx.fillRect(originX, y, tW, h);
 
       // Label cell
-      ctx.fillStyle = '#f2f2f2';
+      ctx.fillStyle = '#f0f0f0';
       ctx.fillRect(originX, y, labelW, h);
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 0.7;
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 0.6;
       ctx.strokeRect(originX, y, labelW, h);
 
-      // Label text
+      // Label text — same visual weight as col headers
       ctx.fillStyle = '#000';
       if (r.d) {
-        ctx.font = fBold; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(r.l, originX + labelW/2, y + h * 0.33);
-        ctx.font = fDesc; ctx.fillStyle = '#444';
+        ctx.font = F_LABEL; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(r.l, originX + labelW/2, y + h * 0.32);
+        ctx.font = F_DESC; ctx.fillStyle = '#555';
         ctx.fillText(r.d, originX + labelW/2, y + h * 0.72);
       } else {
-        cellText(r.l, originX, y, labelW, h, fBold);
+        cellText(r.l, originX, y, labelW, h, F_LABEL);
       }
 
       // Value cells
@@ -2121,55 +2127,54 @@ function printBlankSheet() {
         const cx = originX + labelW + i * valW;
         ctx.fillStyle = r.ro && !isGrand ? '#ededed' : '#fff';
         ctx.fillRect(cx, y, valW, h);
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 0.7;
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 0.6;
         ctx.strokeRect(cx, y, valW, h);
       });
 
-      // Grand: single merged white cell across all value cols
+      // Grand: merge value cells into one
       if (isGrand) {
         ctx.fillStyle = '#fff';
         const gx = originX + labelW;
         ctx.fillRect(gx, y, valW * nCols, h);
         ctx.strokeRect(gx, y, valW * nCols, h);
       }
-
       y += h;
     });
   }
 
-  // ── Title ────────────────────────────────────────────────────────────
-  // ── Layout calculation ────────────────────────────────────────────────
+  // ── Layout: two spacers — before UKUPNO and before SVEUKUPNO ─────────
+  // printRows already has spacers before SVEUKUPNO; add one before UKUPNO too
+  // We insert spacer logic inside drawTable printRows loop — handled by r.s values
+
+  // ── Canvas layout ─────────────────────────────────────────────────────
   const usableW = CW - 2*MAR;
-  const tableW  = Math.floor(usableW / 3) - Math.round(3*MM);
+  const thirdW  = usableW / 3;                          // width of each third
+  const tableW  = LABEL_W + nCols * VAL_W;              // actual table width (fixed)
 
-  // Calculate total table height so we can vertically centre it
-  const rowH    = Math.round(9  * MM);
-  const headH   = Math.round(10 * MM);
-  const spacerH = Math.round(3  * MM);
-  const grandH  = Math.round(11 * MM);
-  const nDataRows = printRows.filter(r => r.s !== 'spacer').length;
-  const nSpacers  = printRows.filter(r => r.s === 'spacer').length;
-  const nGrand    = printRows.filter(r => r.s === 'grand').length;
-  const nNormal   = nDataRows - nGrand;
-  const tableH    = headH + nNormal * rowH + nSpacers * spacerH + nGrand * grandH;
+  // Table height for vertical centring
+  const nGrand   = printRows.filter(r => r.s === 'grand').length;
+  const nSpacers = printRows.filter(r => r.s === 'spacer').length;
+  const nNormal  = printRows.filter(r => r.s !== 'spacer' && r.s !== 'grand').length;
+  const tableH   = HEAD_H + nNormal * ROW_H + nSpacers * SPACER_H + nGrand * GRAND_H;
 
-  const titleH  = Math.round(10 * MM);
-  const titleGap= Math.round(4  * MM);
-  const totalBlockH = titleH + titleGap + tableH;
-  const startY  = Math.round((CH - totalBlockH) / 2);  // vertically centred
-  const titleY  = startY + Math.round(titleH / 2);
+  const titleH   = Math.round(9 * MM);
+  const titleGap = Math.round(4 * MM);
+  const totalH   = titleH + titleGap + tableH;
+  const startY   = Math.round((CH - totalH) / 2);
 
-  // Title — centred
-  ctx.font = `bold ${Math.round(7*MM)}px Arial`;
+  // Title
+  ctx.font = `bold ${Math.round(6.5*MM)}px Arial`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#000';
-  ctx.fillText('YAMB', CW / 2, titleY);
+  ctx.fillText('YAMB', CW / 2, startY + titleH / 2);
 
-  const tablesStartY = startY + titleH + titleGap;
+  const tablesY = startY + titleH + titleGap;
 
   for (let i = 0; i < 3; i++) {
-    const ox = MAR + i * (usableW / 3) + (usableW/3 - tableW) / 2;
-    drawTable(Math.round(ox), tablesStartY, tableW);
+    // Centre each table within its third
+    const thirdLeft = MAR + i * thirdW;
+    const ox = Math.round(thirdLeft + (thirdW - tableW) / 2);
+    drawTable(ox, tablesY);
   }
 
   // ── Show image in-app for saving/printing ─────────────────────────
