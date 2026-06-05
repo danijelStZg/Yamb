@@ -39,8 +39,8 @@
     background: var(--bg);
     color: var(--text);
     font-family: 'JetBrains Mono', monospace;
-    overflow-x: hidden;
-    min-height: 100vh;
+    overflow: hidden;
+    height: 100%;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -50,18 +50,22 @@
       radial-gradient(ellipse at bottom, rgba(230,59,111,0.05), transparent 50%),
       var(--bg);
     background-attachment: fixed;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   /* ---------- HEADER ---------- */
   header {
-    position: sticky;
-    top: 0;
+    flex: 0 0 auto;
     z-index: 50;
     background: rgba(245,243,238,0.9);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
-    padding: 10px 14px;
+    padding: 8px 14px 6px;
   }
 
   .header-row {
@@ -130,12 +134,16 @@
 
   /* ---------- SCORECARD ---------- */
   .scorecard-wrap {
-    padding: 12px 8px 200px;
-    overflow-x: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 6px 8px;
+    overflow: hidden;
+    display: flex;
   }
 
   .scorecard {
     width: 100%;
+    height: 100%;
     border-collapse: separate;
     border-spacing: 3px;
     table-layout: fixed;
@@ -144,7 +152,7 @@
   .scorecard th, .scorecard td {
     text-align: center;
     padding: 0;
-    height: 34px;
+    height: auto;
     font-size: 11px;
     border-radius: 6px;
     position: relative;
@@ -156,7 +164,7 @@
     font-weight: 600;
     font-size: 10px;
     letter-spacing: 0.5px;
-    height: 38px;
+    height: auto;
   }
 
   .scorecard th.col-name {
@@ -847,6 +855,18 @@
   }
   .keypad-btn.wide { grid-column: span 3; font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 12px 0; font-weight: 700; }
   .keypad-btn.cancel { background: var(--bg-2); }
+  .keypad-btn.disabled,
+  .keypad-btn:disabled {
+    opacity: 0.28;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .keypad-btn.disabled:active,
+  .keypad-btn:disabled:active {
+    background: var(--surface-2);
+    color: var(--text);
+    transform: none;
+  }
 
   /* ---------- PHYSICAL MODE ---------- */
   body.mode-physical .tray { display: none; }
@@ -868,20 +888,17 @@
 
   /* Action bar for physical mode */
   .phys-actions {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    flex: 0 0 auto;
     background: rgba(245,243,238,0.92);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border-top: 1px solid var(--border);
-    padding: 12px;
+    padding: 10px 12px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
     display: none;
     z-index: 40;
   }
   body.mode-physical .phys-actions { display: flex; gap: 8px; }
-  body.mode-physical .scorecard-wrap { padding-bottom: 100px; }
 
   .phys-info {
     flex: 1;
@@ -932,6 +949,45 @@
     font-weight: 700;
   }
   .score-row-info strong { color: var(--text); font-size: 13px; }
+  .score-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    max-height: 96px;
+    overflow-y: auto;
+  }
+  .score-chip {
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform .05s, background .12s, border-color .12s;
+  }
+  .score-chip:active { transform: scale(.94); }
+  .score-chip.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-7px); }
+    40% { transform: translateX(7px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(5px); }
+  }
+  .score-display.shake {
+    animation: shake .35s ease;
+    color: var(--danger);
+    border-color: var(--danger);
+  }
 </style>
 </head>
 <body>
@@ -968,6 +1024,7 @@
   <div class="keypad">
     <div class="keypad-header" id="scoreKeypadHeader">UNOS</div>
     <div class="score-row-info" id="scoreRowInfo"></div>
+    <div class="score-chips" id="scoreChips"></div>
     <div class="score-display" id="scoreDisplay">0</div>
     <div class="score-keypad">
       <button class="keypad-btn" data-num="1">1</button>
@@ -1251,6 +1308,11 @@ function isCellAvailable(player, col, rowKey) {
   if (!row || row.readonly) return false;
   if (player.sheet[col][rowKey] !== null) return false;
 
+  // When an announcement is active, ONLY the announced cell may be entered.
+  if (state.announcement) {
+    return col === 'announce' && state.announcement.row === rowKey;
+  }
+
   if (col === 'down') {
     const playable = ROWS.filter(r => !r.readonly).map(r => r.key);
     for (const k of playable) {
@@ -1312,8 +1374,16 @@ function renderPhysActions() {
     physAnnBtn.style.display = 'none';
   } else {
     physAnnBtn.style.display = '';
-    // Disable if announce column is full or already announced
-    physAnnBtn.disabled = !hasEmptyAnnounce() || !!state.announcement;
+    if (state.announcement) {
+      // Allow cancelling a mistaken announcement
+      physAnnBtn.disabled = false;
+      physAnnBtn.textContent = 'Otkaži najavu';
+      physAnnBtn.dataset.mode = 'cancel';
+    } else {
+      physAnnBtn.disabled = !hasEmptyAnnounce();
+      physAnnBtn.textContent = 'Najava';
+      physAnnBtn.dataset.mode = 'announce';
+    }
   }
 
   const hint = document.getElementById('physHint');
@@ -1863,7 +1933,119 @@ function openScoreKeypad(col, rowKey) {
   delBtn.style.display = isEditing ? '' : 'none';
   const okBtn = document.getElementById('scoreKeypadOk');
   okBtn.textContent = isEditing ? 'Spremi izmjenu' : 'Potvrdi';
+  // Quick-pick chips of all legal values for this row
+  const chipsWrap = document.getElementById('scoreChips');
+  chipsWrap.innerHTML = '';
+  const allowed = allowedValuesFor(rowKey);
+  if (allowed && allowed.length <= 12) {
+    allowed.forEach(val => {
+      const chip = document.createElement('button');
+      chip.className = 'score-chip' + (String(val) === scoreKeypadValue ? ' active' : '');
+      chip.textContent = val;
+      chip.onclick = () => {
+        scoreKeypadValue = String(val);
+        updateScoreDisplay();
+        [...chipsWrap.children].forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+      };
+      chipsWrap.appendChild(chip);
+    });
+    chipsWrap.style.display = '';
+  } else {
+    chipsWrap.style.display = 'none';
+  }
   document.getElementById('scoreKeypadOverlay').classList.add('active');
+}
+
+// Returns a sorted array of every legal value for a given row (0 always allowed = precrtano).
+function allowedValuesFor(rowKey) {
+  const set = new Set([0]);
+  if (['1','2','3','4','5','6'].includes(rowKey)) {
+    const n = parseInt(rowKey);
+    for (let c = 0; c <= 5; c++) set.add(n * c); // 0..5 kockica te vrijednosti
+    return [...set].sort((a,b)=>a-b);
+  }
+  if (rowKey === 'max' || rowKey === 'min') {
+    for (let s = 5; s <= 30; s++) set.add(s); // zbroj 5 kockica
+    return [...set].sort((a,b)=>a-b);
+  }
+  if (rowKey === 'two_pairs') {
+    // dva razlicita para p1,p2 (1..6), bodovi = 2*p1 + 2*p2 + 10
+    for (let p1 = 1; p1 <= 6; p1++)
+      for (let p2 = 1; p2 <= 6; p2++)
+        if (p1 !== p2) set.add(2*p1 + 2*p2 + 10);
+    return [...set].sort((a,b)=>a-b);
+  }
+  if (rowKey === 'skala') {
+    set.add(35); set.add(45);
+    return [...set].sort((a,b)=>a-b);
+  }
+  if (rowKey === 'full') {
+    // trojka t + par p (t != p), bodovi = 3t + 2p + 30
+    for (let t = 1; t <= 6; t++)
+      for (let p = 1; p <= 6; p++)
+        if (t !== p) set.add(3*t + 2*p + 30);
+    return [...set].sort((a,b)=>a-b);
+  }
+  if (rowKey === 'poker') {
+    for (let f = 1; f <= 6; f++) set.add(4*f + 40);
+    return [...set].sort((a,b)=>a-b);
+  }
+  if (rowKey === 'yamb') {
+    for (let f = 1; f <= 6; f++) set.add(5*f + 50);
+    return [...set].sort((a,b)=>a-b);
+  }
+  return null; // bez ogranicenja
+}
+
+function validationMsg(rowKey) {
+  if (['1','2','3','4','5','6'].includes(rowKey)) {
+    const n = parseInt(rowKey);
+    return `Mora biti višekratnik od ${n} (0–${n*5})`;
+  }
+  if (rowKey === 'max' || rowKey === 'min') return 'Mora biti zbroj 5 kockica (5–30) ili 0';
+  if (rowKey === 'two_pairs') return 'Nevažeći rezultat za 2 para';
+  if (rowKey === 'skala') return 'Skala može biti samo 0, 35 ili 45';
+  if (rowKey === 'full') return 'Nevažeći rezultat za Full';
+  if (rowKey === 'poker') return 'Poker: 0 ili 44, 48, 52, 56, 60, 64';
+  if (rowKey === 'yamb') return 'Yamb: 0 ili 55, 60, 65, 70, 75, 80';
+  return 'Nevažeći rezultat';
+}
+
+function isValidScore(rowKey, value) {
+  const allowed = allowedValuesFor(rowKey);
+  if (!allowed) return true;
+  return allowed.includes(value);
+}
+
+// Which next digits (0–9) can still lead to a legal value, given the current
+// partial entry. A digit d is allowed if some legal value's string starts with
+// current + d (or equals current when checking the whole). Returns null = no
+// restriction (free entry rows like Max/Min).
+function allowedNextDigits(rowKey, current) {
+  const allowed = allowedValuesFor(rowKey);
+  if (!allowed) return null;
+  const strs = allowed.map(v => String(v));
+  const cur = current || '';
+  const next = new Set();
+  for (const s of strs) {
+    if (s.length > cur.length && s.startsWith(cur)) {
+      next.add(s[cur.length]);
+    }
+  }
+  return next; // Set of single-char digit strings
+}
+
+// Enable/disable the numeric keypad buttons for the current row + partial entry.
+function updateKeypadDigits() {
+  if (!scoreKeypadTarget) return;
+  const allowedDigits = allowedNextDigits(scoreKeypadTarget.rowKey, scoreKeypadValue);
+  document.querySelectorAll('#scoreKeypadOverlay .keypad-btn[data-num]').forEach(btn => {
+    const d = btn.dataset.num;
+    const enabled = allowedDigits ? allowedDigits.has(d) : true;
+    btn.disabled = !enabled;
+    btn.classList.toggle('disabled', !enabled);
+  });
 }
 
 function scoreHint(rowKey) {
@@ -1893,12 +2075,20 @@ function closeScoreKeypad() {
 
 function updateScoreDisplay() {
   document.getElementById('scoreDisplay').textContent = scoreKeypadValue || '0';
+  const chipsWrap = document.getElementById('scoreChips');
+  if (chipsWrap) {
+    [...chipsWrap.children].forEach(c => {
+      c.classList.toggle('active', c.textContent === scoreKeypadValue);
+    });
+  }
+  updateKeypadDigits();
 }
 
 document.querySelectorAll('#scoreKeypadOverlay .keypad-btn[data-num]').forEach(btn => {
   btn.onclick = () => {
     if (!scoreKeypadTarget) return;
-    if (scoreKeypadValue.length >= 3) return; // cap 3 digits (max realistic ~150)
+    if (btn.disabled) return;
+    if (scoreKeypadValue.length >= 3) return; // cap 3 digits
     if (scoreKeypadValue === '0') scoreKeypadValue = ''; // replace leading zero
     scoreKeypadValue += btn.dataset.num;
     updateScoreDisplay();
@@ -1918,8 +2108,16 @@ document.getElementById('scoreKeypadZero').onclick = () => {
 document.getElementById('scoreKeypadOk').onclick = () => {
   if (!scoreKeypadTarget) return;
   const v = parseInt(scoreKeypadValue) || 0;
-  const player = state.players[state.current];
   const { col, rowKey, editing } = scoreKeypadTarget;
+  if (!isValidScore(rowKey, v)) {
+    showToast('⚠ ' + validationMsg(rowKey));
+    const disp = document.getElementById('scoreDisplay');
+    disp.classList.remove('shake');
+    void disp.offsetWidth; // restart animation
+    disp.classList.add('shake');
+    return;
+  }
+  const player = state.players[state.current];
   player.sheet[col][rowKey] = v;
   if (editing) {
     // Editing an existing value: just update, do NOT advance turn
@@ -1963,7 +2161,14 @@ function physEndTurn(score) {
 }
 
 // ============== PHYSICAL ANNOUNCE ==============
-document.getElementById('physAnnounceBtn').onclick = () => {
+document.getElementById('physAnnounceBtn').onclick = (e) => {
+  // If an announcement is active, this button cancels it
+  if (state.announcement) {
+    state.announcement = null;
+    showToast('Najava otkazana');
+    render();
+    return;
+  }
   const player = state.players[state.current];
   const grid = document.getElementById('physAnnounceGrid');
   grid.innerHTML = '';
