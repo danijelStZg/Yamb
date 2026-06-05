@@ -1154,8 +1154,10 @@
     <h3>Kolone</h3>
     <div class="column-picker" id="columnPicker"></div>
     <button class="btn btn-roll" id="startBtn" style="width:100%; margin-bottom:8px;">Započni igru</button>
-    <button class="btn btn-menu" id="printSheetSetupBtn" style="width:100%; margin-bottom:8px;">🖨 Ispiši prazan listić</button>
-    <button class="btn btn-menu" id="qrInstallBtn" style="width:100%;">📱 Skeniraj za instalaciju</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-menu" id="printSheetSetupBtn" style="flex:1;">🖨 Ispiši listić</button>
+      <button class="btn btn-menu" id="qrInstallBtn" style="flex:1;">📱 QR Code</button>
+    </div>
   </div>
 </div>
 
@@ -1167,6 +1169,19 @@
     <div id="qrBox" style="display:inline-block; background:#fff; padding:10px; border-radius:12px; border:1px solid var(--border); margin-bottom:16px;"></div>
     <br>
     <button class="btn btn-menu" id="closeQrBtn" style="width:100%;">Zatvori</button>
+  </div>
+</div>
+
+<!-- Print column picker modal -->
+<div class="modal-overlay" id="printPickerModal">
+  <div class="modal">
+    <h2 style="font-size:16px; letter-spacing:2px; margin-bottom:12px;">ODABERI KOLONE</h2>
+    <p style="font-size:11px; color:var(--text-dim); margin-bottom:14px;">Odaberi kolone koje će biti na listiću</p>
+    <div class="column-picker" id="printColumnPicker"></div>
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <button class="btn btn-roll" id="printPickerConfirmBtn" style="flex:1;">🖨 Ispiši</button>
+      <button class="btn btn-menu" id="printPickerCancelBtn" style="flex:1;">Odustani</button>
+    </div>
   </div>
 </div>
 
@@ -1257,26 +1272,37 @@
   </div>
 </div>
 
-<div id="updateBanner" style="
-  display:none; position:fixed; bottom:0; left:0; right:0; z-index:8888;
-  background:var(--accent); color:#fff;
-  padding:14px 16px; text-align:center;
-  font-family:'JetBrains Mono',monospace; font-size:13px;
-  box-shadow:0 -4px 20px rgba(0,0,0,0.2);
-  animation: slideUp .3s ease;
+<div id="updateModal" style="
+  display:none; position:fixed; inset:0; z-index:8888;
+  background:rgba(0,0,0,0.55); backdrop-filter:blur(4px);
+  align-items:center; justify-content:center;
 ">
-  🆕 Nova verzija je dostupna!
-  <button onclick="location.reload()" style="
-    margin-left:12px; background:#fff; color:var(--accent);
-    border:none; border-radius:6px; padding:6px 14px;
-    font-weight:700; font-size:12px; cursor:pointer;
-    font-family:'JetBrains Mono',monospace;
-  ">Osvježi</button>
-  <button onclick="document.getElementById('updateBanner').style.display='none'" style="
-    margin-left:6px; background:transparent; color:rgba(255,255,255,0.7);
-    border:1px solid rgba(255,255,255,0.4); border-radius:6px; padding:6px 10px;
-    font-size:12px; cursor:pointer; font-family:'JetBrains Mono',monospace;
-  ">✕</button>
+  <div style="
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:28px 24px; max-width:320px; width:90%; text-align:center;
+    box-shadow:var(--shadow-lg); font-family:'JetBrains Mono',monospace;
+  ">
+    <div style="font-size:28px; margin-bottom:12px;">🆕</div>
+    <div style="font-size:14px; font-weight:700; color:var(--text); letter-spacing:1px; margin-bottom:8px;">
+      NOVA VERZIJA
+    </div>
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:24px; line-height:1.6;">
+      Dostupna je nova verzija aplikacije. Želiš li je instalirati sada?
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button id="updateYesBtn" style="
+        flex:1; background:var(--accent); color:#fff; border:none; border-radius:8px;
+        padding:12px; font-family:'JetBrains Mono',monospace; font-size:12px;
+        font-weight:700; letter-spacing:1px; cursor:pointer;
+      ">Da, instaliraj</button>
+      <button id="updateNoBtn" style="
+        flex:1; background:var(--surface-2); color:var(--text-dim);
+        border:1px solid var(--border); border-radius:8px;
+        padding:12px; font-family:'JetBrains Mono',monospace; font-size:12px;
+        cursor:pointer;
+      ">Ne, kasnije</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2001,17 +2027,69 @@ document.getElementById('closeLoadBtn').onclick = () => document.getElementById(
 
 document.getElementById('viewSheetsBtn').onclick = openViewSheets;
 document.getElementById('closeSheetsBtn').onclick = () => document.getElementById('viewSheetsModal').classList.remove('active');
+// Print from menu — open column picker first
+let printPickerCols = ALL_COLUMNS.slice();
+
+function renderPrintPicker() {
+  const wrap = document.getElementById('printColumnPicker');
+  wrap.innerHTML = '';
+  ALL_COLUMNS.forEach(col => {
+    const isActive = printPickerCols.includes(col);
+    const item = document.createElement('div');
+    item.className = 'col-pick' + (isActive ? ' active' : '');
+    item.innerHTML = `
+      <span class="col-pick-icon">${COL_LABELS[col]}</span>
+      <span class="col-pick-label">${COL_NAMES[col]}</span>
+      <span class="col-pick-check">${isActive ? '✓' : ''}</span>
+    `;
+    item.onclick = () => {
+      const idx = printPickerCols.indexOf(col);
+      if (idx >= 0) {
+        if (printPickerCols.length === 1) { showToast('Mora biti barem jedna kolona'); return; }
+        printPickerCols.splice(idx, 1);
+      } else {
+        printPickerCols = ALL_COLUMNS.filter(c => printPickerCols.includes(c) || c === col);
+      }
+      renderPrintPicker();
+    };
+    wrap.appendChild(item);
+  });
+}
+
 document.getElementById('printSheetBtn').onclick = () => {
   document.getElementById('menuModal').classList.remove('active');
-  printBlankSheet();
+  // Pre-select current game cols if active, else all
+  if (state && state.enabledColumns && state.enabledColumns.length) {
+    printPickerCols = state.enabledColumns.slice();
+  } else {
+    printPickerCols = ALL_COLUMNS.slice();
+  }
+  renderPrintPicker();
+  document.getElementById('printPickerModal').classList.add('active');
 };
-document.getElementById('printSheetSetupBtn').onclick = printBlankSheet;
+
+document.getElementById('printSheetSetupBtn').onclick = () => {
+  printPickerCols = ALL_COLUMNS.slice();
+  renderPrintPicker();
+  document.getElementById('printPickerModal').classList.add('active');
+};
+
+document.getElementById('printPickerConfirmBtn').onclick = () => {
+  document.getElementById('printPickerModal').classList.remove('active');
+  printBlankSheet(printPickerCols);
+};
+
+document.getElementById('printPickerCancelBtn').onclick = () => {
+  document.getElementById('printPickerModal').classList.remove('active');
+};
 
 // ============== PRINT BLANK SHEET (A4, 3 tablice jedna do druge) ==============
-function printBlankSheet() {
-  // Use the columns selected for the current/intended game.
+function printBlankSheet(overrideCols) {
+  // Use passed cols, or fall back to game/setup cols
   let activeCols;
-  if (state && state.enabledColumns && state.enabledColumns.length) {
+  if (overrideCols && overrideCols.length) {
+    activeCols = overrideCols;
+  } else if (state && state.enabledColumns && state.enabledColumns.length) {
     activeCols = state.enabledColumns;
   } else if (typeof setupColumns !== 'undefined' && setupColumns.length) {
     activeCols = setupColumns;
@@ -2045,29 +2123,34 @@ function printBlankSheet() {
   const MM = DPI / 25.4;           // pixels per mm
   const CW = Math.round(297 * MM); // 1754 px
   const CH = Math.round(210 * MM); // 1240 px
-  const MAR = Math.round(8 * MM);  // margin 8mm
+  const MAR = Math.round(6 * MM);  // 6mm margin
 
   const can = document.createElement('canvas');
   can.width = CW; can.height = CH;
   const ctx = can.getContext('2d');
 
-  // White background
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, CW, CH);
 
-  // ── Helper: draw one table ───────────────────────────────────────────
-  // Fixed column dimensions — same regardless of how many cols selected
-  const LABEL_W = Math.round(30 * MM);  // label column: fixed 30mm
-  const VAL_W   = Math.round(12 * MM);  // each value column: fixed 12mm
-  const ROW_H   = Math.round(8.5*MM);
-  const HEAD_H  = Math.round(9.5*MM);
-  const SPACER_H= Math.round(3.5*MM);
-  const GRAND_H = Math.round(10 * MM);
+  // ── Fixed column widths ───────────────────────────────────────────────
+  const LABEL_W = Math.round(30 * MM);
+  const VAL_W   = Math.round(12 * MM);
+  const HEAD_H  = Math.round(9.5 * MM);
+  const SPACER_H= Math.round(3.5 * MM);
+  const GRAND_H = Math.round(10  * MM);
 
-  // Font sizes — label text same weight/size as header labels
-  const F_LABEL = `bold ${Math.round(4.6*MM)}px Arial`;   // row labels (same size as col headers)
-  const F_HEAD  = `bold ${Math.round(5.2*MM)}px Arial`;   // column header arrows
-  const F_DESC  = `${Math.round(3.2*MM)}px Arial`;        // small description text
+  // Calculate how tall each normal row should be to fill available height
+  const availH   = CH - 2 * MAR;
+  const nGrand   = printRows.filter(r => r.s === 'grand').length;
+  const nSpacers = printRows.filter(r => r.s === 'spacer').length;
+  const nNormal  = printRows.filter(r => r.s !== 'spacer' && r.s !== 'grand').length;
+  const fixedH   = HEAD_H + nSpacers * SPACER_H + nGrand * GRAND_H;
+  const ROW_H    = Math.floor((availH - fixedH) / nNormal);  // fills full height
+
+  // Font sizes — label smaller than col headers, desc clearly separated
+  const F_LABEL = `bold ${Math.round(3.9*MM)}px Arial`;   // label: slightly smaller
+  const F_HEAD  = `bold ${Math.round(5.2*MM)}px Arial`;   // col headers (arrows)
+  const F_DESC  = `${Math.round(3.0*MM)}px Arial`;        // description text
 
   function drawTable(originX, originY) {
     const labelW = LABEL_W;
@@ -2111,11 +2194,12 @@ function printBlankSheet() {
       ctx.strokeStyle = '#000'; ctx.lineWidth = 0.6;
       ctx.strokeRect(originX, y, labelW, h);
 
-      // Label text — same visual weight as col headers
+      // Label text
       ctx.fillStyle = '#000';
       if (r.d) {
+        // Main label in upper 42%, desc in lower 35% — more separation
         ctx.font = F_LABEL; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(r.l, originX + labelW/2, y + h * 0.32);
+        ctx.fillText(r.l, originX + labelW/2, y + h * 0.30);
         ctx.font = F_DESC; ctx.fillStyle = '#555';
         ctx.fillText(r.d, originX + labelW/2, y + h * 0.72);
       } else {
@@ -2131,7 +2215,7 @@ function printBlankSheet() {
         ctx.strokeRect(cx, y, valW, h);
       });
 
-      // Grand: merge value cells into one
+      // Grand: merge value cells
       if (isGrand) {
         ctx.fillStyle = '#fff';
         const gx = originX + labelW;
@@ -2142,39 +2226,15 @@ function printBlankSheet() {
     });
   }
 
-  // ── Layout: two spacers — before UKUPNO and before SVEUKUPNO ─────────
-  // printRows already has spacers before SVEUKUPNO; add one before UKUPNO too
-  // We insert spacer logic inside drawTable printRows loop — handled by r.s values
-
-  // ── Canvas layout ─────────────────────────────────────────────────────
+  // ── Canvas layout — tables fill full height, each centred in its third ─
   const usableW = CW - 2*MAR;
-  const thirdW  = usableW / 3;                          // width of each third
-  const tableW  = LABEL_W + nCols * VAL_W;              // actual table width (fixed)
-
-  // Table height for vertical centring
-  const nGrand   = printRows.filter(r => r.s === 'grand').length;
-  const nSpacers = printRows.filter(r => r.s === 'spacer').length;
-  const nNormal  = printRows.filter(r => r.s !== 'spacer' && r.s !== 'grand').length;
-  const tableH   = HEAD_H + nNormal * ROW_H + nSpacers * SPACER_H + nGrand * GRAND_H;
-
-  const titleH   = Math.round(9 * MM);
-  const titleGap = Math.round(4 * MM);
-  const totalH   = titleH + titleGap + tableH;
-  const startY   = Math.round((CH - totalH) / 2);
-
-  // Title
-  ctx.font = `bold ${Math.round(6.5*MM)}px Arial`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#000';
-  ctx.fillText('YAMB', CW / 2, startY + titleH / 2);
-
-  const tablesY = startY + titleH + titleGap;
+  const thirdW  = usableW / 3;
+  const tableW  = LABEL_W + nCols * VAL_W;
 
   for (let i = 0; i < 3; i++) {
-    // Centre each table within its third
     const thirdLeft = MAR + i * thirdW;
     const ox = Math.round(thirdLeft + (thirdW - tableW) / 2);
-    drawTable(ox, tablesY);
+    drawTable(ox, MAR);
   }
 
   // ── Show image in-app for saving/printing ─────────────────────────
@@ -2613,30 +2673,39 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').then(reg => {
 
-      // If there's already a waiting SW on first load, show banner immediately
-      if (reg.waiting) {
-        document.getElementById('updateBanner').style.display = 'block';
+      function showUpdateModal() {
+        const modal = document.getElementById('updateModal');
+        modal.style.display = 'flex';
       }
+
+      // If there's already a waiting SW on first load, show immediately
+      if (reg.waiting) showUpdateModal();
 
       // When a new SW finishes installing and goes to "waiting"
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            document.getElementById('updateBanner').style.display = 'block';
+            showUpdateModal();
           }
         });
       });
 
-      // Reload the page when the new SW takes control (after user clicks "Osvježi")
+      // Reload when new SW takes control
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!refreshing) { refreshing = true; location.reload(); }
       });
 
-      // "Osvježi" button tells the waiting SW to skip waiting
-      document.querySelector('#updateBanner button').addEventListener('click', () => {
+      // "Da, instaliraj" — tell waiting SW to skip waiting
+      document.getElementById('updateYesBtn').addEventListener('click', () => {
+        document.getElementById('updateModal').style.display = 'none';
         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      });
+
+      // "Ne, kasnije" — just close the modal
+      document.getElementById('updateNoBtn').addEventListener('click', () => {
+        document.getElementById('updateModal').style.display = 'none';
       });
 
     }).catch(err => console.log('SW reg failed:', err));
