@@ -1,5 +1,5 @@
 /* Yamb service worker — offline-first caching for GitHub Pages */
-const CACHE = 'yamb-v2';
+const CACHE = 'yamb-v8';
 
 /* Paths are relative so this works whether the app is served from the
    domain root or from a project subpath (e.g. user.github.io/yamb/). */
