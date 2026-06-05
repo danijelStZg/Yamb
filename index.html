@@ -2008,7 +2008,6 @@ document.getElementById('printSheetSetupBtn').onclick = printBlankSheet;
 // ============== PRINT BLANK SHEET (A4, 3 tablice jedna do druge) ==============
 function printBlankSheet() {
   // Use the columns selected for the current/intended game.
-  // During a game -> state.enabledColumns (via getCols); on the setup screen -> setupColumns.
   let activeCols;
   if (state && state.enabledColumns && state.enabledColumns.length) {
     activeCols = state.enabledColumns;
@@ -2017,7 +2016,6 @@ function printBlankSheet() {
   } else {
     activeCols = ALL_COLUMNS.slice();
   }
-  // Keep canonical order
   const cols = ALL_COLUMNS.filter(c => activeCols.includes(c));
   const colDefs = cols.map(c => ({ lab: COL_LABELS[c], name: COL_NAMES[c] }));
   const nCols = colDefs.length;
@@ -2027,7 +2025,7 @@ function printBlankSheet() {
     { l:'5', s:'top' }, { l:'6', s:'top' },
     { l:'Međuzbroj', s:'sum', ro:true },
     { l:'Max', s:'mid', sep:true }, { l:'Min', s:'mid' },
-    { l:'Razlika', d:'(Max − Min) × br. jedinica', s:'sum', ro:true },
+    { l:'Razlika', d:'(Max−Min)×br.jed.', s:'sum', ro:true },
     { l:'2 para', d:'+10', s:'bot', sep:true },
     { l:'Skala', d:'mala 35 · velika 45', s:'bot' },
     { l:'Full', d:'+30', s:'bot' },
@@ -2035,99 +2033,163 @@ function printBlankSheet() {
     { l:'Yamb', d:'+50', s:'bot' },
     { l:'Međuzbroj', s:'sum', ro:true },
     { l:'UKUPNO', s:'total', ro:true },
+    { l:'', s:'spacer', ro:true },
+    { l:'SVEUKUPNO', s:'grand', ro:true },
   ];
 
-  const buildTable = () => {
-    let h = '<table class="ps"><colgroup><col class="cl">';
-    colDefs.forEach(() => h += '<col class="cv">');
-    h += '</colgroup><thead><tr><th class="rh"></th>';
-    colDefs.forEach(c => h += `<th title="${c.name}">${c.lab}</th>`);
-    h += '</tr></thead><tbody>';
-    printRows.forEach(r => {
-      const cls = [];
-      if (r.s === 'sum' || r.s === 'total') cls.push('sum');
-      if (r.sep) cls.push('sep');
-      const trcls = cls.length ? ` class="${cls.join(' ')}"` : '';
-      const desc = r.d ? `<span class="d">${r.d}</span>` : '';
-      // Insert spacer row before UKUPNO
-      if (r.s === 'total') h += `<tr class="spacer"><td colspan="${nCols + 1}"></td></tr>`;
-      h += `<tr${trcls}><td class="rl">${r.l}${desc}</td>`;
-      colDefs.forEach(() => h += (r.ro ? '<td class="ro"></td>' : '<td></td>'));
-      h += '</tr>';
+  // ── Canvas dimensions: A4 landscape at 150 DPI ──────────────────────
+  const DPI = 150;
+  const MM = DPI / 25.4;           // pixels per mm
+  const CW = Math.round(297 * MM); // 1754 px
+  const CH = Math.round(210 * MM); // 1240 px
+  const MAR = Math.round(8 * MM);  // margin 8mm
+
+  const can = document.createElement('canvas');
+  can.width = CW; can.height = CH;
+  const ctx = can.getContext('2d');
+
+  // White background
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, CW, CH);
+
+  // ── Helper: draw one table ───────────────────────────────────────────
+  function drawTable(originX, tableWidth) {
+    const valW   = Math.round(11 * MM);           // fixed value column width
+    const labelW = tableWidth - nCols * valW;     // label gets remaining space
+    const rowH   = Math.round(9 * MM);
+    const headH  = Math.round(10 * MM);
+    const spacerH= Math.round(3 * MM);
+    const grandH = Math.round(11 * MM);
+    const fBold  = `bold ${Math.round(5.2*MM)}px Arial`;
+    const fDesc  = `${Math.round(3.4*MM)}px Arial`;
+    const fHead  = `bold ${Math.round(6*MM)}px Arial`;
+
+    function cellText(text, x, y, w, h, font, color, yOffset) {
+      ctx.font = font; ctx.fillStyle = color || '#000';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(text, x + w/2, y + h/2 + (yOffset||0));
+    }
+
+    let y = 0;
+
+    // Header row
+    ctx.fillStyle = '#e6e6e6';
+    ctx.fillRect(originX, y, tableWidth, headH);
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 0.7;
+    ctx.strokeRect(originX, y, labelW, headH);
+    colDefs.forEach((c, i) => {
+      const cx = originX + labelW + i * valW;
+      ctx.strokeRect(cx, y, valW, headH);
+      cellText(c.lab, cx, y, valW, headH, fHead);
     });
-    // Spacer then grand total
-    h += `<tr class="spacer"><td colspan="${nCols + 1}"></td></tr>`;
-    h += `<tr class="grand"><td class="rl">SVEUKUPNO</td><td class="gtotal" colspan="${nCols}"></td></tr>`;
-    h += '</tbody></table>';
-    return h;
+    y += headH;
+
+    // Data rows
+    printRows.forEach(r => {
+      const isSpacer = r.s === 'spacer';
+      const isGrand  = r.s === 'grand';
+      const isSum    = r.s === 'sum' || r.s === 'total';
+      const h = isSpacer ? spacerH : isGrand ? grandH : rowH;
+      if (isSpacer) { y += h; return; }
+
+      // Row background
+      const bg = isSum ? '#e6e6e6' : isGrand ? '#d4d4d4' : '#fff';
+      ctx.fillStyle = bg;
+      ctx.fillRect(originX, y, tableWidth, h);
+
+      // Label cell
+      ctx.fillStyle = '#f2f2f2';
+      ctx.fillRect(originX, y, labelW, h);
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 0.7;
+      ctx.strokeRect(originX, y, labelW, h);
+
+      // Label text
+      ctx.fillStyle = '#000';
+      if (r.d) {
+        ctx.font = fBold; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(r.l, originX + labelW/2, y + h * 0.33);
+        ctx.font = fDesc; ctx.fillStyle = '#444';
+        ctx.fillText(r.d, originX + labelW/2, y + h * 0.72);
+      } else {
+        cellText(r.l, originX, y, labelW, h, fBold);
+      }
+
+      // Value cells
+      colDefs.forEach((_, i) => {
+        const cx = originX + labelW + i * valW;
+        ctx.fillStyle = r.ro && !isGrand ? '#ededed' : '#fff';
+        ctx.fillRect(cx, y, valW, h);
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 0.7;
+        ctx.strokeRect(cx, y, valW, h);
+      });
+
+      // Grand: single merged white cell across all value cols
+      if (isGrand) {
+        ctx.fillStyle = '#fff';
+        const gx = originX + labelW;
+        ctx.fillRect(gx, y, valW * nCols, h);
+        ctx.strokeRect(gx, y, valW * nCols, h);
+      }
+
+      y += h;
+    });
+  }
+
+  // ── Title ────────────────────────────────────────────────────────────
+  ctx.font = `bold ${Math.round(7*MM)}px Arial`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#000';
+  ctx.fillText('YAMB', CW/2, MAR + Math.round(4*MM));
+
+  // ── Three tables, evenly distributed across page width ───────────────
+  const usableW = CW - 2*MAR;
+  const tableW  = Math.floor(usableW / 3) - Math.round(3*MM);
+  const titleH  = Math.round(12*MM);
+  const startY  = MAR + titleH;
+
+  for (let i = 0; i < 3; i++) {
+    const ox = MAR + i * (usableW / 3) + (usableW/3 - tableW) / 2;
+    ctx.save();
+    ctx.translate(Math.round(ox), startY);
+    // drawTable draws relative to (0,0), so translate
+    ctx.restore();
+    drawTable(Math.round(ox), tableW);
+  }
+
+  // ── Convert to image and print via iframe ────────────────────────────
+  const imgData = can.toDataURL('image/png');
+  const printDoc = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      @page { size: landscape; margin: 0; }
+      @media print { html,body { margin:0; } img { page-break-inside:avoid; } }
+      body { display:flex; align-items:center; justify-content:center;
+             width:100vw; height:100vh; background:#fff; }
+      img { max-width:100%; max-height:100%; display:block; }
+    </style></head>
+    <body><img src="${imgData}" alt="Yamb listić"></body></html>`;
+
+  const existing = document.getElementById('printFrame');
+  if (existing) existing.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'printFrame';
+  iframe.setAttribute('aria-hidden', 'true');
+  Object.assign(iframe.style, {
+    position:'fixed', right:'0', bottom:'0',
+    width:'1px', height:'1px', border:'0', opacity:'0', pointerEvents:'none'
+  });
+  document.body.appendChild(iframe);
+
+  const go = () => {
+    try { iframe.contentWindow.focus(); iframe.contentWindow.print(); }
+    catch(e) { showToast('Ispis nije uspio'); }
+    setTimeout(() => { try { iframe.remove(); } catch(e){} }, 4000);
   };
 
-  // Table width scales with number of columns; keep value cols a fixed width.
-  const labelW = 26;       // mm
-  const valW = 12.6;       // mm
-  const tableW = (labelW + nCols * valW).toFixed(1);
-
-  const css = `
-    @page { size: A4 landscape; margin: 8mm; }
-    @media print {
-      html, body { width: 297mm; height: 210mm; }
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    }
-    * { box-sizing: border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; margin: 0; color: #000; }
-    h1 { text-align: center; font-size: 16px; margin: 0 0 4mm; letter-spacing: 2px; }
-    .sheets { display: flex; gap: 0; justify-content: space-around; align-items: flex-start; width: 281mm; box-sizing: border-box; }
-    .sheet-wrap { flex: 0 0 33.33%; display: flex; justify-content: center; align-items: flex-start; }
-    .ps { border-collapse: collapse; width: ${tableW}mm; table-layout: fixed; }
-    .ps col.cl { width: ${labelW}mm; }
-    .ps col.cv { width: ${valW}mm; }
-    .ps th, .ps td { border: 0.5px solid #000; text-align: center; height: 9mm;
-                     font-size: 12px; padding: 0; overflow: hidden; }
-    .ps thead th { background: #e6e6e6; font-weight: 700; font-size: 13px; }
-    .ps td.rl { font-weight: 700; background: #f2f2f2; font-size: 12px; padding: 0 3px; line-height: 1.1; }
-    .ps td.rl .d { display: block; font-weight: 400; font-size: 8px; color: #333; }
-    .ps tr.sum td { background: #e6e6e6; font-weight: 700; }
-    .ps tr.grand td { background: #d4d4d4; font-weight: 700; height: 11mm; }
-    .ps tr.grand .gtotal { background: #fff; }
-    .ps td.ro { background: #ededed; }
-    .ps tr.sep td { border-top: 2px solid #000; }
-    .ps tr.spacer td { height: 3mm; border: none; background: transparent; padding: 0; }
-  `;
-
-  const doc = `<!DOCTYPE html><html lang="hr"><head><meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Yamb — prazan listić</title><style>${css}</style></head>
-    <body onload="setTimeout(()=>{window.focus();window.print();},400)">
-    <h1>YAMB</h1>
-    <div class="sheets">${['','',''].map(()=>`<div class="sheet-wrap">${buildTable()}</div>`).join('')}</div>
-    </body></html>`;
-
-  // Open in a new tab — triggered directly from user gesture so no popup block.
-  // window.open + window.print() is the most reliable way to get landscape on mobile.
-  const w = window.open('', '_blank');
-  if (w) {
-    w.document.open();
-    w.document.write(doc);
-    w.document.close();
-    // onload in the doc body handles print; also fallback here
-    w.addEventListener('load', () => {
-      setTimeout(() => { try { w.focus(); } catch(e){} }, 300);
-    });
-  } else {
-    // Popup blocked — fallback to hidden iframe
-    const existing = document.getElementById('printFrame');
-    if (existing) existing.remove();
-    const iframe = document.createElement('iframe');
-    iframe.id = 'printFrame';
-    iframe.setAttribute('aria-hidden', 'true');
-    Object.assign(iframe.style, {position:'fixed',right:'0',bottom:'0',width:'0',height:'0',border:'0',opacity:'0'});
-    document.body.appendChild(iframe);
-    const idoc = iframe.contentWindow.document;
-    idoc.open(); idoc.write(doc); idoc.close();
-    const go = () => { try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(e){} setTimeout(()=>iframe.remove(), 2000); };
-    iframe.contentWindow.document.readyState === 'complete' ? setTimeout(go, 300) : (iframe.onload = ()=>setTimeout(go, 300));
-    showToast('Ako se ispis ne otvori, dozvoli skočne prozore');
-  }
+  const idoc = iframe.contentWindow.document;
+  idoc.open(); idoc.write(printDoc); idoc.close();
+  setTimeout(go, 700);
 }
 
 // Override new game button to confirm
