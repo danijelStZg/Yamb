@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#f4f7f4">
+<link rel="manifest" href="./manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
@@ -2063,7 +2064,7 @@ function printBlankSheet() {
   ctx.fillRect(0, 0, CW, CH);
 
   // ── Helper: draw one table ───────────────────────────────────────────
-  function drawTable(originX, tableWidth) {
+  function drawTable(originX, originY, tableWidth) {
     const valW   = Math.round(11 * MM);           // fixed value column width
     const labelW = tableWidth - nCols * valW;     // label gets remaining space
     const rowH   = Math.round(9 * MM);
@@ -2080,7 +2081,7 @@ function printBlankSheet() {
       ctx.fillText(text, x + w/2, y + h/2 + (yOffset||0));
     }
 
-    let y = 0;
+    let y = originY;
 
     // Header row
     ctx.fillStyle = '#e6e6e6';
@@ -2146,24 +2147,38 @@ function printBlankSheet() {
   }
 
   // ── Title ────────────────────────────────────────────────────────────
+  // ── Layout calculation ────────────────────────────────────────────────
+  const usableW = CW - 2*MAR;
+  const tableW  = Math.floor(usableW / 3) - Math.round(3*MM);
+
+  // Calculate total table height so we can vertically centre it
+  const rowH    = Math.round(9  * MM);
+  const headH   = Math.round(10 * MM);
+  const spacerH = Math.round(3  * MM);
+  const grandH  = Math.round(11 * MM);
+  const nDataRows = printRows.filter(r => r.s !== 'spacer').length;
+  const nSpacers  = printRows.filter(r => r.s === 'spacer').length;
+  const nGrand    = printRows.filter(r => r.s === 'grand').length;
+  const nNormal   = nDataRows - nGrand;
+  const tableH    = headH + nNormal * rowH + nSpacers * spacerH + nGrand * grandH;
+
+  const titleH  = Math.round(10 * MM);
+  const titleGap= Math.round(4  * MM);
+  const totalBlockH = titleH + titleGap + tableH;
+  const startY  = Math.round((CH - totalBlockH) / 2);  // vertically centred
+  const titleY  = startY + Math.round(titleH / 2);
+
+  // Title — centred
   ctx.font = `bold ${Math.round(7*MM)}px Arial`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#000';
-  ctx.fillText('YAMB', CW/2, MAR + Math.round(4*MM));
+  ctx.fillText('YAMB', CW / 2, titleY);
 
-  // ── Three tables, evenly distributed across page width ───────────────
-  const usableW = CW - 2*MAR;
-  const tableW  = Math.floor(usableW / 3) - Math.round(3*MM);
-  const titleH  = Math.round(12*MM);
-  const startY  = MAR + titleH;
+  const tablesStartY = startY + titleH + titleGap;
 
   for (let i = 0; i < 3; i++) {
     const ox = MAR + i * (usableW / 3) + (usableW/3 - tableW) / 2;
-    ctx.save();
-    ctx.translate(Math.round(ox), startY);
-    // drawTable draws relative to (0,0), so translate
-    ctx.restore();
-    drawTable(Math.round(ox), tableW);
+    drawTable(Math.round(ox), tablesStartY, tableW);
   }
 
   // ── Show image in-app for saving/printing ─────────────────────────

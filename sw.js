@@ -1,5 +1,5 @@
 /* Yamb service worker — offline-first caching for GitHub Pages */
-const CACHE = 'yamb-v24';
+const CACHE = 'yamb-v25';
 const BASE = '/Yamb/';
 
 const ASSETS = [
