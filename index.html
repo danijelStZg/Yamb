@@ -1478,26 +1478,24 @@ function isCellAvailable(player, col, rowKey) {
     }
   }
   if (col === 'mid') {
-    // Two independent starts: max (fills downward 6→1) and min (fills upward 1→6).
-    // The region grows inward from BOTH ends at the same time until they meet.
-    const order = ['max','6','5','4','3','2','1','min'];
-    const filled = order.filter(k => player.sheet.mid[k] !== null && k !== 'sum_mid');
-    const targetIdx = order.indexOf(rowKey);
-    if (targetIdx === -1) return false;
+    // Two independent chains, each starting from its anchor:
+    //   MAX chain (upward through the number rows): max → 6 → 5 → 4 → 3 → 2 → 1
+    //   MIN chain (downward through the combos):    min → 2 para → skala → full → poker → yamb
+    // At the start only max and min are open. Each subsequent cell in a chain
+    // unlocks only once the previous cell in THAT chain is filled.
+    const maxChain = ['max', '6', '5', '4', '3', '2', '1'];
+    const minChain = ['min', 'two_pairs', 'skala', 'full', 'poker', 'yamb'];
 
-    // max/min may always be entered as long as they're still empty (independent starts)
-    if (rowKey === 'max' || rowKey === 'min') {
-      return player.sheet.mid[rowKey] === null;
+    function chainPlayable(chain) {
+      const idx = chain.indexOf(rowKey);
+      if (idx === -1) return false;
+      if (idx === 0) return player.sheet.mid[rowKey] === null; // the anchor (max/min)
+      // previous cell in this chain must be filled, and this one still empty
+      return player.sheet.mid[chain[idx - 1]] !== null
+          && player.sheet.mid[rowKey] === null;
     }
 
-    // A numeric cell is playable if the cell directly above it (toward max)
-    // is filled, OR the cell directly below it (toward min) is filled.
-    // This lets the region grow inward from both ends simultaneously.
-    const aboveKey = order[targetIdx - 1]; // toward max
-    const belowKey = order[targetIdx + 1]; // toward min
-    const aboveFilled = aboveKey !== undefined && player.sheet.mid[aboveKey] !== null;
-    const belowFilled = belowKey !== undefined && player.sheet.mid[belowKey] !== null;
-    return aboveFilled || belowFilled;
+    return chainPlayable(maxChain) || chainPlayable(minChain);
   }
   if (col === 'free') return true;
   if (col === 'announce') {
