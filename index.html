@@ -1243,7 +1243,7 @@
     <p><strong>↑ Gore:</strong> popunjavaš redom od Yamba do 1.</p>
     <p><strong>↕ Sredina:</strong> kreneš s Maxom ili Minom prema gore i dolje.</p>
     <p><strong>N Najava:</strong> nakon prvog bacanja moraš najaviti polje.</p>
-    <p><strong>⇅ Slobodno:</strong> popunjavaš bilo kojim redom.</p>
+    <p><strong>S Slobodno:</strong> popunjavaš bilo kojim redom.</p>
     <h3>Bacanje</h3>
     <p>Imaš 3 bacanja po potezu. Tapni kockicu da je zadržiš ili otpustiš između bacanja.</p>
     <h3>Bodovi</h3>
@@ -1316,7 +1316,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 // ============== GAME CONFIG ==============
 const ALL_COLUMNS = ['down', 'up', 'mid', 'announce', 'free'];
 const COLUMNS = ALL_COLUMNS; // legacy alias for places that need full list
-const COL_LABELS = { down:'↓', up:'↑', mid:'↕', announce:'N', free:'⇅' };
+const COL_LABELS = { down:'↓', up:'↑', mid:'↕', announce:'N', free:'S' };
 const COL_NAMES = { down:'Dolje', up:'Gore', mid:'Sredina', announce:'Najava', free:'Slobodno' };
 
 // Returns enabled columns for current game (falls back to all)
@@ -1478,25 +1478,26 @@ function isCellAvailable(player, col, rowKey) {
     }
   }
   if (col === 'mid') {
-    // Must start with max or min
-    const empty = ROWS.filter(r => !r.readonly && player.sheet.mid[r.key] === null).map(r=>r.key);
-    const filled = ROWS.filter(r => !r.readonly && player.sheet.mid[r.key] !== null).map(r=>r.key);
-    if (filled.length === 0) {
-      return rowKey === 'max' || rowKey === 'min';
-    }
-    // After max/min set, expand outward
-    // Define order: max at top, then 6,5,4,3,2,1, then min at bottom — or the inverse
-    // Standard rule: starting from max going down, or from min going up
-    // We'll allow any cell adjacent to filled region
+    // Two independent starts: max (fills downward 6→1) and min (fills upward 1→6).
+    // The region grows inward from BOTH ends at the same time until they meet.
     const order = ['max','6','5','4','3','2','1','min'];
-    // Find filled region
-    const filledIdx = order.map((k,i)=> filled.includes(k) ? i : -1).filter(i=>i>=0);
-    if (filledIdx.length === 0) return rowKey === 'max' || rowKey === 'min';
-    const minF = Math.min(...filledIdx);
-    const maxF = Math.max(...filledIdx);
+    const filled = order.filter(k => player.sheet.mid[k] !== null && k !== 'sum_mid');
     const targetIdx = order.indexOf(rowKey);
     if (targetIdx === -1) return false;
-    return targetIdx === minF - 1 || targetIdx === maxF + 1;
+
+    // max/min may always be entered as long as they're still empty (independent starts)
+    if (rowKey === 'max' || rowKey === 'min') {
+      return player.sheet.mid[rowKey] === null;
+    }
+
+    // A numeric cell is playable if the cell directly above it (toward max)
+    // is filled, OR the cell directly below it (toward min) is filled.
+    // This lets the region grow inward from both ends simultaneously.
+    const aboveKey = order[targetIdx - 1]; // toward max
+    const belowKey = order[targetIdx + 1]; // toward min
+    const aboveFilled = aboveKey !== undefined && player.sheet.mid[aboveKey] !== null;
+    const belowFilled = belowKey !== undefined && player.sheet.mid[belowKey] !== null;
+    return aboveFilled || belowFilled;
   }
   if (col === 'free') return true;
   if (col === 'announce') {
