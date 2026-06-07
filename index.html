@@ -1215,7 +1215,7 @@
     <button class="btn btn-roll" id="newGameBtn" style="width:100%; margin-bottom:8px;">Nova igra</button>
     <button class="btn btn-announce" id="saveGameBtn" style="width:100%; margin-bottom:8px; display:none;">Spremi igru</button>
     <button class="btn btn-menu" id="loadGameBtn" style="width:100%; margin-bottom:8px;">Učitaj spremljenu igru</button>
-    <button class="btn btn-menu" id="leaderboardBtn" style="width:100%; margin-bottom:8px;">🏆 Povijest rezultata</button>
+    <button class="btn btn-menu" id="leaderboardBtn" style="width:100%; margin-bottom:8px;">🏆 Ljestvica rezultata</button>
     <button class="btn btn-menu" id="printSheetBtn" style="width:100%; margin-bottom:8px;">🖨 Ispiši prazan listić</button>
     <button class="btn btn-menu" id="qrMenuBtn" style="width:100%; margin-bottom:8px;">📱 QR Code</button>
     <button class="btn btn-menu" id="rulesBtn" style="width:100%; margin-bottom:8px;">Pravila</button>
@@ -1246,7 +1246,7 @@
 <!-- Leaderboard Modal -->
 <div class="modal-overlay" id="leaderboardModal">
   <div class="modal">
-    <h2>POVIJEST REZULTATA</h2>
+    <h2>LJESTVICA REZULTATA</h2>
     <div id="leaderboardList" style="margin: 12px 0; max-height:50vh; overflow-y:auto;"></div>
     <div style="display:flex; gap:8px;">
       <button class="btn btn-menu" id="clearLeaderboardBtn" style="flex:1;">Obriši sve</button>
@@ -1304,8 +1304,7 @@
       <div class="winner-score" id="winnerScore">0</div>
     </div>
     <div class="scoreboard-final" id="finalBoard"></div>
-    <button class="btn btn-menu" id="endLeaderboardBtn" style="width:100%; margin-bottom:8px;">🏆 Povijest rezultata</button>
-    <button class="btn btn-roll" id="playAgainBtn" style="width:100%;">Nova igra</button>
+    <button class="btn btn-roll" id="endCloseBtn" style="width:100%;">Zatvori</button>
   </div>
 </div>
 
@@ -1892,10 +1891,11 @@ document.getElementById('rulesBtn').onclick = () => {
   document.getElementById('rulesModal').classList.add('active');
 };
 document.getElementById('closeRulesBtn').onclick = () => backToMenu('rulesModal');
-document.getElementById('playAgainBtn').onclick = () => {
+document.getElementById('endCloseBtn').onclick = () => {
   document.getElementById('endModal').classList.remove('active');
-  renderSetupInputs();
-  document.getElementById('setupModal').classList.add('active');
+  state = null;
+  updateMenuState();
+  document.getElementById('menuModal').classList.add('active');
 };
 
 // QR iz menija
@@ -1953,16 +1953,60 @@ function formatLbDate(ts) {
 function renderLeaderboard() {
   const list = document.getElementById('leaderboardList');
   if (!list) return;
-  const board = getLeaderboard().slice().sort((a, b) => b.score - a.score);
+  // Radimo na kopiji sortirane po rezultatu; čuvamo originalni indeks za brisanje/rename
+  const raw = getLeaderboard(); // originalni niz (nesortirani)
+  const board = raw.map((e, i) => ({ ...e, _idx: i })).sort((a, b) => b.score - a.score);
   if (board.length === 0) {
     list.innerHTML = '<p style="font-size:12px;color:var(--text-faint);text-align:center;padding:20px 0;">Još nema zabilježenih rezultata.</p>';
     return;
   }
   list.innerHTML = '';
-  board.forEach((e, i) => {
+  board.forEach((e, rank) => {
     const row = document.createElement('div');
     row.className = 'scoreboard-final-row';
-    row.innerHTML = `<span><strong>${i + 1}.</strong> ${escapeHtml(e.name)} <span style="color:var(--text-faint);font-size:10px;">${formatLbDate(e.date)}</span></span><strong style="color:var(--accent)">${e.score}</strong>`;
+    row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);';
+
+    const info = document.createElement('span');
+    info.style.flex = '1';
+    info.innerHTML = `<strong>${rank + 1}.</strong> ${escapeHtml(e.name)} <span style="color:var(--text-faint);font-size:10px;">${formatLbDate(e.date)}</span>`;
+
+    const score = document.createElement('strong');
+    score.style.color = 'var(--accent)';
+    score.textContent = e.score;
+
+    // Rename gumb
+    const renameBtn = document.createElement('button');
+    renameBtn.textContent = '✏️';
+    renameBtn.title = 'Promijeni ime';
+    renameBtn.style.cssText = 'background:none; border:none; cursor:pointer; font-size:14px; padding:2px 4px; opacity:0.7;';
+    renameBtn.onclick = () => {
+      const newName = prompt(`Novo ime za "${e.name}":`, e.name);
+      if (newName && newName.trim() && newName.trim() !== e.name) {
+        const lb = getLeaderboard();
+        lb[e._idx].name = newName.trim();
+        setLeaderboard(lb);
+        renderLeaderboard();
+      }
+    };
+
+    // Delete gumb
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '🗑';
+    delBtn.title = 'Obriši';
+    delBtn.style.cssText = 'background:none; border:none; cursor:pointer; font-size:14px; padding:2px 4px; opacity:0.7;';
+    delBtn.onclick = () => {
+      if (confirm(`Obrisati rezultat za "${e.name}" (${e.score})?`)) {
+        const lb = getLeaderboard();
+        lb.splice(e._idx, 1);
+        setLeaderboard(lb);
+        renderLeaderboard();
+      }
+    };
+
+    row.appendChild(info);
+    row.appendChild(score);
+    row.appendChild(renameBtn);
+    row.appendChild(delBtn);
     list.appendChild(row);
   });
 }
@@ -2201,12 +2245,12 @@ document.getElementById('closeLoadBtn').onclick = () => backToMenu('loadModal');
 
 document.getElementById('closeSheetsBtn').onclick = () => document.getElementById('viewSheetsModal').classList.remove('active');
 
-// Leaderboard / povijest rezultata
+// Leaderboard / ljestvica rezultata
 document.getElementById('leaderboardBtn').onclick = () => {
   document.getElementById('menuModal').classList.remove('active');
   openLeaderboard();
 };
-document.getElementById('endLeaderboardBtn').onclick = openLeaderboard;
+
 document.getElementById('closeLeaderboardBtn').onclick = () => backToMenu('leaderboardModal');
 document.getElementById('clearLeaderboardBtn').onclick = () => {
   if (confirm('Obrisati cijelu povijest rezultata?')) {
