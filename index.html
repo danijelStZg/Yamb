@@ -120,6 +120,18 @@
     box-shadow: 0 0 0 1px var(--accent), 0 4px 16px rgba(90,168,151,0.15);
   }
 
+  /* Indikator da je ovaj igrač na redu */
+  .player-tab.on-turn::before {
+    content: '★';
+    position: absolute;
+    top: 50%;
+    left: 5px;
+    transform: translateY(-50%);
+    font-size: 14px;
+    color: var(--accent);
+    line-height: 1;
+  }
+
   .player-tab .tab-name {
     font-weight: 700;
     letter-spacing: 1px;
@@ -1201,7 +1213,6 @@
     <button class="btn btn-roll" id="newGameBtn" style="width:100%; margin-bottom:8px;">Nova igra</button>
     <button class="btn btn-announce" id="saveGameBtn" style="width:100%; margin-bottom:8px;">Spremi igru</button>
     <button class="btn btn-menu" id="loadGameBtn" style="width:100%; margin-bottom:8px;">Učitaj spremljenu igru</button>
-    <button class="btn btn-menu" id="viewSheetsBtn" style="width:100%; margin-bottom:8px;">Pregled svih tablica</button>
     <button class="btn btn-menu" id="leaderboardBtn" style="width:100%; margin-bottom:8px;">🏆 Povijest rezultata</button>
     <button class="btn btn-menu" id="printSheetBtn" style="width:100%; margin-bottom:8px;">🖨 Ispiši prazan listić</button>
     <button class="btn btn-menu" id="rulesBtn" style="width:100%; margin-bottom:8px;">Pravila</button>
@@ -1369,6 +1380,7 @@ const ROWS = [
 
 // ============== STATE ==============
 let state = null;
+let viewPlayerIdx = 0; // koji igrač se trenutno prikazuje na scorecard-u (može se razlikovati od state.current)
 
 function newPlayer(name, cols) {
   const sheet = {};
@@ -1389,6 +1401,7 @@ function newGame(playerNames, enabledColumns) {
     announcement: null, // { row }
     started: false,
   };
+  viewPlayerIdx = 0;
   render();
 }
 
@@ -1576,11 +1589,24 @@ function renderPhysActions() {
 function renderTabs() {
   const tabs = document.getElementById('playerTabs');
   tabs.innerHTML = '';
+  const multi = state.players.length > 1;
   state.players.forEach((p, i) => {
     const sums = calcSums(p.sheet);
     const tab = document.createElement('div');
-    tab.className = 'player-tab' + (i === state.current ? ' active' : '');
+    const isOnTurn = i === state.current;
+    const isViewing = i === viewPlayerIdx;
+    let cls = 'player-tab';
+    if (isViewing) cls += ' active';
+    if (isOnTurn) cls += ' on-turn';
+    tab.className = cls;
     tab.innerHTML = `<div class="tab-name">${escapeHtml(p.name)}</div><div class="tab-score">${sums.grand}</div>`;
+    if (multi) {
+      tab.onclick = () => {
+        viewPlayerIdx = i;
+        renderTabs();
+        renderScorecard();
+      };
+    }
     tabs.appendChild(tab);
   });
 }
@@ -1589,7 +1615,8 @@ function renderScorecard() {
   const body = document.getElementById('scorecardBody');
   const head = document.getElementById('scorecardHead');
   const colgroup = document.getElementById('scorecardCols');
-  const player = state.players[state.current];
+  const player = state.players[viewPlayerIdx];
+  const isActivePlayer = viewPlayerIdx === state.current;
   const sums = calcSums(player.sheet);
   const cols = getCols();
 
@@ -1637,13 +1664,13 @@ function renderScorecard() {
         if (value !== null) {
           td.className = 'cell filled';
           td.textContent = value;
-          // Allow editing/deleting an entered value
-          td.onclick = () => openScoreKeypad(col, row.key);
+          // Allow editing/deleting only for the active player
+          if (isActivePlayer) td.onclick = () => openScoreKeypad(col, row.key);
         } else if (isAnnounced) {
           td.className = 'cell announced';
           td.textContent = '+';
-          td.onclick = () => openScoreKeypad(col, row.key);
-        } else if (isAvailable) {
+          if (isActivePlayer) td.onclick = () => openScoreKeypad(col, row.key);
+        } else if (isAvailable && isActivePlayer) {
           td.className = 'cell available';
           td.textContent = '+';
           td.onclick = () => openScoreKeypad(col, row.key);
@@ -2147,7 +2174,6 @@ document.getElementById('loadGameBtn').onclick = () => {
 };
 document.getElementById('closeLoadBtn').onclick = () => document.getElementById('loadModal').classList.remove('active');
 
-document.getElementById('viewSheetsBtn').onclick = openViewSheets;
 document.getElementById('closeSheetsBtn').onclick = () => document.getElementById('viewSheetsModal').classList.remove('active');
 
 // Leaderboard / povijest rezultata
@@ -2736,6 +2762,7 @@ function physEndTurn(score) {
   }
   // Next player
   state.current = (state.current + 1) % state.players.length;
+  viewPlayerIdx = state.current;
   state.announcement = null;
   render();
 }
