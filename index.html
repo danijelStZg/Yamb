@@ -609,7 +609,8 @@
     position: fixed;
     top: 80px;
     left: 50%;
-    transform: translateX(-50%) translateY(-100px);
+    transform: translateX(-50%) translateY(-200px);
+    opacity: 0;
     background: var(--surface-2);
     border: 1px solid var(--accent);
     color: var(--text);
@@ -619,12 +620,20 @@
     font-weight: 600;
     letter-spacing: 0.5px;
     z-index: 200;
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
     box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 12px 32px rgba(0,0,0,0.08);
     max-width: 90%;
     text-align: center;
   }
-  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.show {
+    animation: toast-fly 1.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  @keyframes toast-fly {
+    0%   { transform: translateX(-50%) translateY(-200px); opacity: 0; }
+    12%  { transform: translateX(-50%) translateY(0);      opacity: 1; }
+    65%  { transform: translateX(-50%) translateY(0);      opacity: 1; }
+    100% { transform: translateX(-50%) translateY(-260px); opacity: 0; }
+  }
 
   /* ---------- VIEW SHEETS / SAVED GAMES ---------- */
   .sheet-tab {
@@ -1193,6 +1202,7 @@
     <button class="btn btn-announce" id="saveGameBtn" style="width:100%; margin-bottom:8px;">Spremi igru</button>
     <button class="btn btn-menu" id="loadGameBtn" style="width:100%; margin-bottom:8px;">Učitaj spremljenu igru</button>
     <button class="btn btn-menu" id="viewSheetsBtn" style="width:100%; margin-bottom:8px;">Pregled svih tablica</button>
+    <button class="btn btn-menu" id="leaderboardBtn" style="width:100%; margin-bottom:8px;">🏆 Povijest rezultata</button>
     <button class="btn btn-menu" id="printSheetBtn" style="width:100%; margin-bottom:8px;">🖨 Ispiši prazan listić</button>
     <button class="btn btn-menu" id="rulesBtn" style="width:100%; margin-bottom:8px;">Pravila</button>
     <button class="btn btn-roll" id="installAppBtn" style="width:100%; margin-bottom:8px; display:none;">📲 Instaliraj aplikaciju</button>
@@ -1216,6 +1226,18 @@
     <h2>SPREMLJENE IGRE</h2>
     <div id="savedGamesList" style="margin: 12px 0;"></div>
     <button class="btn btn-menu" id="closeLoadBtn" style="width:100%;">Zatvori</button>
+  </div>
+</div>
+
+<!-- Leaderboard Modal -->
+<div class="modal-overlay" id="leaderboardModal">
+  <div class="modal">
+    <h2>POVIJEST REZULTATA</h2>
+    <div id="leaderboardList" style="margin: 12px 0; max-height:50vh; overflow-y:auto;"></div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-menu" id="clearLeaderboardBtn" style="flex:1;">Obriši sve</button>
+      <button class="btn btn-roll" id="closeLeaderboardBtn" style="flex:1;">Zatvori</button>
+    </div>
   </div>
 </div>
 
@@ -1268,6 +1290,7 @@
       <div class="winner-score" id="winnerScore">0</div>
     </div>
     <div class="scoreboard-final" id="finalBoard"></div>
+    <button class="btn btn-menu" id="endLeaderboardBtn" style="width:100%; margin-bottom:8px;">🏆 Povijest rezultata</button>
     <button class="btn btn-roll" id="playAgainBtn" style="width:100%;">Nova igra</button>
   </div>
 </div>
@@ -1383,8 +1406,14 @@ function calcScore(rowKey, dice) {
   }
   if (rowKey === 'max' || rowKey === 'min') return sum;
   if (rowKey === 'two_pairs') {
-    // Dva razlicita para: zbroj oba para * 2 + 10
+    // Dva para: dva različita para ILI četiri iste (npr. 4 šestice = dva para šestica)
     const pairs = Object.entries(counts).filter(([k,v]) => v >= 2);
+    const four = Object.entries(counts).find(([k,v]) => v >= 4);
+    if (four) {
+      // četiri iste -> oba para su isti broj
+      const p = parseInt(four[0]);
+      return (p * 2) + (p * 2) + 10;
+    }
     if (pairs.length >= 2) {
       // uzmi dva najveca para
       pairs.sort((a,b) => parseInt(b[0]) - parseInt(a[0]));
@@ -1650,6 +1679,13 @@ function showEndScreen() {
   clearAutosave();
   const scores = state.players.map(p => ({ name: p.name, score: calcSums(p.sheet).grand }));
   scores.sort((a,b) => b.score - a.score);
+
+  // Zabilježi rezultate u povijest najboljih (samo jednom po igri)
+  if (!state._recorded) {
+    recordLeaderboard(scores);
+    state._recorded = true;
+  }
+
   document.getElementById('winnerName').textContent = scores[0].name;
   document.getElementById('winnerScore').textContent = scores[0].score;
 
@@ -1668,8 +1704,12 @@ function showEndScreen() {
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
+  // restart animaciju i ako se toast pojavi više puta zaredom
+  t.classList.remove('show');
+  void t.offsetWidth; // force reflow
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 1800);
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(() => t.classList.remove('show'), 1800);
 }
 
 function escapeHtml(s) {
@@ -1682,12 +1722,27 @@ let setupCount = 2;
 function renderSetupInputs() {
   const wrap = document.getElementById('playerInputs');
   wrap.innerHTML = '';
+
+  // Datalist s dosad korištenim imenima (autocomplete)
+  const known = getKnownNames();
+  let listId = 'knownNamesList';
+  let datalist = document.getElementById(listId);
+  if (!datalist) {
+    datalist = document.createElement('datalist');
+    datalist.id = listId;
+    document.body.appendChild(datalist);
+  }
+  datalist.innerHTML = known.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+
   for (let i = 0; i < setupCount; i++) {
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = `Igrač ${i+1}`;
     input.value = `Igrač ${i+1}`;
     input.maxLength = 12;
+    if (known.length) input.setAttribute('list', listId);
+    // odaberi sav tekst na fokus radi lakšeg upisa/odabira imena
+    input.addEventListener('focus', () => input.select());
     wrap.appendChild(input);
   }
 }
@@ -1796,6 +1851,74 @@ document.getElementById('playAgainBtn').onclick = () => {
 // ============== SAVE / LOAD ==============
 const SAVE_KEY = 'yamb_saved_games_v1';
 const AUTOSAVE_KEY = 'yamb_autosave_v1';
+const LEADERBOARD_KEY = 'yamb_leaderboard_v1';
+
+function getLeaderboard() {
+  try {
+    return JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || '[]');
+  } catch { return []; }
+}
+
+function setLeaderboard(arr) {
+  try { localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(arr)); } catch(e) { console.error(e); }
+}
+
+// Zabilježi rezultate svih igrača na kraju igre
+function recordLeaderboard(scores) {
+  const board = getLeaderboard();
+  const now = Date.now();
+  scores.forEach(s => {
+    board.push({ name: s.name, score: s.score, date: now });
+  });
+  // sortiraj od najvećeg prema najmanjem
+  board.sort((a, b) => b.score - a.score);
+  // ograniči na 100 zapisa
+  setLeaderboard(board.slice(0, 100));
+}
+
+// Skupi sva dosad korištena imena (iz povijesti i spremljenih igara)
+function getKnownNames() {
+  const names = new Set();
+  getLeaderboard().forEach(e => { if (e.name) names.add(e.name); });
+  getSavedGames().forEach(g => {
+    (g.state && g.state.players || g.players || []).forEach(p => {
+      if (p && p.name) names.add(p.name);
+    });
+  });
+  return [...names].sort((a, b) => a.localeCompare(b, 'hr'));
+}
+
+function formatLbDate(ts) {
+  try {
+    const d = new Date(ts);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = d.getFullYear();
+    return `${dd}.${mm}.${yy}.`;
+  } catch { return ''; }
+}
+
+function renderLeaderboard() {
+  const list = document.getElementById('leaderboardList');
+  if (!list) return;
+  const board = getLeaderboard().slice().sort((a, b) => b.score - a.score);
+  if (board.length === 0) {
+    list.innerHTML = '<p style="font-size:12px;color:var(--text-faint);text-align:center;padding:20px 0;">Još nema zabilježenih rezultata.</p>';
+    return;
+  }
+  list.innerHTML = '';
+  board.forEach((e, i) => {
+    const row = document.createElement('div');
+    row.className = 'scoreboard-final-row';
+    row.innerHTML = `<span><strong>${i + 1}.</strong> ${escapeHtml(e.name)} <span style="color:var(--text-faint);font-size:10px;">${formatLbDate(e.date)}</span></span><strong style="color:var(--accent)">${e.score}</strong>`;
+    list.appendChild(row);
+  });
+}
+
+function openLeaderboard() {
+  renderLeaderboard();
+  document.getElementById('leaderboardModal').classList.add('active');
+}
 
 function getSavedGames() {
   try {
@@ -2026,6 +2149,20 @@ document.getElementById('closeLoadBtn').onclick = () => document.getElementById(
 
 document.getElementById('viewSheetsBtn').onclick = openViewSheets;
 document.getElementById('closeSheetsBtn').onclick = () => document.getElementById('viewSheetsModal').classList.remove('active');
+
+// Leaderboard / povijest rezultata
+document.getElementById('leaderboardBtn').onclick = () => {
+  document.getElementById('menuModal').classList.remove('active');
+  openLeaderboard();
+};
+document.getElementById('endLeaderboardBtn').onclick = openLeaderboard;
+document.getElementById('closeLeaderboardBtn').onclick = () => document.getElementById('leaderboardModal').classList.remove('active');
+document.getElementById('clearLeaderboardBtn').onclick = () => {
+  if (confirm('Obrisati cijelu povijest rezultata?')) {
+    setLeaderboard([]);
+    renderLeaderboard();
+  }
+};
 // Print from menu — open column picker first
 let printPickerCols = ALL_COLUMNS.slice();
 
@@ -2412,10 +2549,11 @@ function allowedValuesFor(rowKey) {
     return [...set].sort((a,b)=>a-b);
   }
   if (rowKey === 'two_pairs') {
-    // dva razlicita para p1,p2 (1..6), bodovi = 2*p1 + 2*p2 + 10
+    // dva para p1,p2 (1..6), bodovi = 2*p1 + 2*p2 + 10
+    // dopušteno i četiri iste (p1 === p2, npr. 4 šestice)
     for (let p1 = 1; p1 <= 6; p1++)
       for (let p2 = 1; p2 <= 6; p2++)
-        if (p1 !== p2) set.add(2*p1 + 2*p2 + 10);
+        set.add(2*p1 + 2*p2 + 10);
     return [...set].sort((a,b)=>a-b);
   }
   if (rowKey === 'skala') {
