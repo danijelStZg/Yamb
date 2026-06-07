@@ -1088,7 +1088,12 @@
   var splash = document.getElementById('splash');
   function dismiss() {
     splash.classList.add('fade-out');
-    setTimeout(function() { splash.style.display = 'none'; }, 460);
+    setTimeout(function() {
+      splash.style.display = 'none';
+      // Otvori glavni meni umjesto setup ekrana
+      var menu = document.getElementById('menuModal');
+      if (menu) menu.classList.add('active');
+    }, 460);
   }
   splash.addEventListener('click', dismiss);
   splash.addEventListener('touchstart', function(e) { e.preventDefault(); dismiss(); }, {passive: false});
@@ -1160,7 +1165,7 @@
 </div>
 
 <!-- Setup Modal -->
-<div class="modal-overlay active" id="setupModal">
+<div class="modal-overlay" id="setupModal">
   <div class="modal">
     <h2>NOVA IGRA</h2>
     <h3>Broj igrača</h3>
@@ -1175,10 +1180,7 @@
     <h3>Kolone</h3>
     <div class="column-picker" id="columnPicker"></div>
     <button class="btn btn-roll" id="startBtn" style="width:100%; margin-bottom:8px;">Započni igru</button>
-    <div style="display:flex; gap:8px;">
-      <button class="btn btn-menu" id="printSheetSetupBtn" style="flex:1;">🖨 Ispiši listić</button>
-      <button class="btn btn-menu" id="qrInstallBtn" style="flex:1;">📱 QR Code</button>
-    </div>
+    <button class="btn btn-menu" id="cancelSetupBtn" style="width:100%;">Odustani</button>
   </div>
 </div>
 
@@ -1211,13 +1213,14 @@
   <div class="modal">
     <h2>MENI</h2>
     <button class="btn btn-roll" id="newGameBtn" style="width:100%; margin-bottom:8px;">Nova igra</button>
-    <button class="btn btn-announce" id="saveGameBtn" style="width:100%; margin-bottom:8px;">Spremi igru</button>
+    <button class="btn btn-announce" id="saveGameBtn" style="width:100%; margin-bottom:8px; display:none;">Spremi igru</button>
     <button class="btn btn-menu" id="loadGameBtn" style="width:100%; margin-bottom:8px;">Učitaj spremljenu igru</button>
     <button class="btn btn-menu" id="leaderboardBtn" style="width:100%; margin-bottom:8px;">🏆 Povijest rezultata</button>
     <button class="btn btn-menu" id="printSheetBtn" style="width:100%; margin-bottom:8px;">🖨 Ispiši prazan listić</button>
+    <button class="btn btn-menu" id="qrMenuBtn" style="width:100%; margin-bottom:8px;">📱 QR Code</button>
     <button class="btn btn-menu" id="rulesBtn" style="width:100%; margin-bottom:8px;">Pravila</button>
     <button class="btn btn-roll" id="installAppBtn" style="width:100%; margin-bottom:8px; display:none;">📲 Instaliraj aplikaciju</button>
-    <button class="btn btn-menu" id="closeMenuBtn" style="width:100%;">Zatvori</button>
+    <button class="btn btn-menu" id="closeMenuBtn" style="width:100%; display:none;">Zatvori</button>
   </div>
 </div>
 
@@ -1834,11 +1837,16 @@ function renderInstallQR() {
   }
 }
 
-document.getElementById('qrInstallBtn').onclick = () => {
-  renderInstallQR();
-  document.getElementById('qrModal').classList.add('active');
-};
-document.getElementById('closeQrBtn').onclick = () => document.getElementById('qrModal').classList.remove('active');
+// Zatvori modal i vrati se u meni ako nema aktivne igre
+function backToMenu(modalId) {
+  document.getElementById(modalId).classList.remove('active');
+  if (!state || isGameOver()) {
+    updateMenuState();
+    document.getElementById('menuModal').classList.add('active');
+  }
+}
+
+document.getElementById('closeQrBtn').onclick = () => backToMenu('qrModal');
 document.getElementById('qrModal').addEventListener('click', e => {
   if (e.target === document.getElementById('qrModal')) document.getElementById('qrModal').classList.remove('active');
 });
@@ -1855,24 +1863,46 @@ document.getElementById('playerCount').addEventListener('click', e => {
 document.getElementById('startBtn').onclick = () => {
   const inputs = document.querySelectorAll('#playerInputs input');
   const names = [...inputs].map((i, idx) => i.value.trim() || `Igrač ${idx+1}`);
-  // Use selected columns in canonical order
   const cols = ALL_COLUMNS.filter(c => setupColumns.includes(c));
   newGame(names, cols);
   document.getElementById('setupModal').classList.remove('active');
 };
 
+document.getElementById('cancelSetupBtn').onclick = () => {
+  document.getElementById('setupModal').classList.remove('active');
+  // Vrati na meni samo ako nema aktivne igre
+  if (!state) document.getElementById('menuModal').classList.add('active');
+};
+
 // ============== EVENTS ==============
-document.getElementById('menuBtn').onclick = () => document.getElementById('menuModal').classList.add('active');
+
+function updateMenuState() {
+  const inGame = !!(state && !isGameOver());
+  document.getElementById('saveGameBtn').style.display  = inGame ? '' : 'none';
+  document.getElementById('closeMenuBtn').style.display = inGame ? '' : 'none';
+}
+
+document.getElementById('menuBtn').onclick = () => {
+  updateMenuState();
+  document.getElementById('menuModal').classList.add('active');
+};
 document.getElementById('closeMenuBtn').onclick = () => document.getElementById('menuModal').classList.remove('active');
 document.getElementById('rulesBtn').onclick = () => {
   document.getElementById('menuModal').classList.remove('active');
   document.getElementById('rulesModal').classList.add('active');
 };
-document.getElementById('closeRulesBtn').onclick = () => document.getElementById('rulesModal').classList.remove('active');
+document.getElementById('closeRulesBtn').onclick = () => backToMenu('rulesModal');
 document.getElementById('playAgainBtn').onclick = () => {
   document.getElementById('endModal').classList.remove('active');
-  renderSetupInputs(); // obnovi listu poznatih imena (uključuje upravo završenu igru)
+  renderSetupInputs();
   document.getElementById('setupModal').classList.add('active');
+};
+
+// QR iz menija
+document.getElementById('qrMenuBtn').onclick = () => {
+  renderInstallQR();
+  document.getElementById('menuModal').classList.remove('active');
+  document.getElementById('qrModal').classList.add('active');
 };
 
 // ============== SAVE / LOAD ==============
@@ -2167,7 +2197,7 @@ document.getElementById('loadGameBtn').onclick = () => {
   renderSavedGamesList();
   document.getElementById('loadModal').classList.add('active');
 };
-document.getElementById('closeLoadBtn').onclick = () => document.getElementById('loadModal').classList.remove('active');
+document.getElementById('closeLoadBtn').onclick = () => backToMenu('loadModal');
 
 document.getElementById('closeSheetsBtn').onclick = () => document.getElementById('viewSheetsModal').classList.remove('active');
 
@@ -2177,7 +2207,7 @@ document.getElementById('leaderboardBtn').onclick = () => {
   openLeaderboard();
 };
 document.getElementById('endLeaderboardBtn').onclick = openLeaderboard;
-document.getElementById('closeLeaderboardBtn').onclick = () => document.getElementById('leaderboardModal').classList.remove('active');
+document.getElementById('closeLeaderboardBtn').onclick = () => backToMenu('leaderboardModal');
 document.getElementById('clearLeaderboardBtn').onclick = () => {
   if (confirm('Obrisati cijelu povijest rezultata?')) {
     setLeaderboard([]);
@@ -2225,20 +2255,16 @@ document.getElementById('printSheetBtn').onclick = () => {
   document.getElementById('printPickerModal').classList.add('active');
 };
 
-document.getElementById('printSheetSetupBtn').onclick = () => {
-  printPickerCols = ALL_COLUMNS.slice();
-  renderPrintPicker();
-  document.getElementById('printPickerModal').classList.add('active');
-};
-
 document.getElementById('printPickerConfirmBtn').onclick = () => {
   document.getElementById('printPickerModal').classList.remove('active');
   printBlankSheet(printPickerCols);
+  if (!state || isGameOver()) {
+    updateMenuState();
+    document.getElementById('menuModal').classList.add('active');
+  }
 };
 
-document.getElementById('printPickerCancelBtn').onclick = () => {
-  document.getElementById('printPickerModal').classList.remove('active');
-};
+document.getElementById('printPickerCancelBtn').onclick = () => backToMenu('printPickerModal');
 
 // ============== PRINT BLANK SHEET (A4, 3 tablice jedna do druge) ==============
 function printBlankSheet(overrideCols) {
@@ -2494,13 +2520,14 @@ function init() {
           render();
         },
       });
-      // Cancel handler: open setup again
+      // Cancel handler: otvori meni
       const origCancel = document.getElementById('confirmCancelBtn').onclick;
       document.getElementById('confirmCancelBtn').onclick = () => {
         document.getElementById('confirmModal').classList.remove('active');
         confirmCallback = null;
         clearAutosave();
-        document.getElementById('setupModal').classList.add('active');
+        updateMenuState();
+        document.getElementById('menuModal').classList.add('active');
         // restore original cancel behavior
         document.getElementById('confirmCancelBtn').onclick = origCancel;
       };
