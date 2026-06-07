@@ -1765,10 +1765,9 @@ function renderSetupInputs() {
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = `Igrač ${i+1}`;
-    input.value = `Igrač ${i+1}`;
+    input.value = ''; // prazan — placeholder se ne sprema kao pravo ime
     input.maxLength = 12;
     if (known.length) input.setAttribute('list', listId);
-    // odaberi sav tekst na fokus radi lakšeg upisa/odabira imena
     input.addEventListener('focus', () => input.select());
     wrap.appendChild(input);
   }
@@ -1872,6 +1871,7 @@ document.getElementById('rulesBtn').onclick = () => {
 document.getElementById('closeRulesBtn').onclick = () => document.getElementById('rulesModal').classList.remove('active');
 document.getElementById('playAgainBtn').onclick = () => {
   document.getElementById('endModal').classList.remove('active');
+  renderSetupInputs(); // obnovi listu poznatih imena (uključuje upravo završenu igru)
   document.getElementById('setupModal').classList.add('active');
 };
 
@@ -1907,11 +1907,6 @@ function recordLeaderboard(scores) {
 function getKnownNames() {
   const names = new Set();
   getLeaderboard().forEach(e => { if (e.name) names.add(e.name); });
-  getSavedGames().forEach(g => {
-    (g.state && g.state.players || g.players || []).forEach(p => {
-      if (p && p.name) names.add(p.name);
-    });
-  });
   return [...names].sort((a, b) => a.localeCompare(b, 'hr'));
 }
 
@@ -2456,10 +2451,12 @@ document.getElementById('newGameBtn').onclick = () => {
       msg: 'Trenutna igra će biti izgubljena ako je ne spremiš. Sigurno želiš novu?',
       onOk: () => {
         clearAutosave();
+        renderSetupInputs();
         document.getElementById('setupModal').classList.add('active');
       },
     });
   } else {
+    renderSetupInputs();
     document.getElementById('setupModal').classList.add('active');
   }
 };
